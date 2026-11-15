@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'services/app_notification_service.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/portal_provider.dart';
+import 'screens/live_shell_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/advance_screen.dart';
 import 'screens/attendance_screen.dart';
@@ -25,8 +27,6 @@ import 'screens/team_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // لازم تحميل رموز التاريخ العربية قبل أي تنسيق تاريخ،
-  // وإلا يرمي استثناء LocaleDataException وتفشل الشاشة.
   await initializeDateFormatting('ar');
   await AppNotificationService.initialize();
   runApp(const EmployeePortalApp());
@@ -53,7 +53,8 @@ class EmployeePortalApp extends StatelessWidget {
         },
         initialRoute: '/',
         routes: {
-          '/': (context) => const SplashScreen(),
+          '/': (context) => kIsWeb ? const SplashScreen() : const LiveShellScreen(),
+          '/shell': (context) => const LiveShellScreen(),
           '/splash': (context) => const SplashScreen(),
           '/login': (context) => const LoginScreen(),
           '/home': (context) => const HomeScreen(),
