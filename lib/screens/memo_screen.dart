@@ -1,52 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../core/theme/app_theme.dart';
+import '../models/workflow_request.dart';
 import '../providers/portal_provider.dart';
 
 class MemoScreen extends StatelessWidget {
   const MemoScreen({super.key});
 
-  static const _memos = [
-    _InternalMemo(
-      title: 'تحديث ساعات العمل الرسمية',
-      date: '01 أكتوبر 2026',
-      category: 'تنظيم إداري',
-      body:
-          'نود التذكير بأوقات الدوام الرسمي وآلية تسجيل الحضور والانصراف عبر بوابة الموظف.',
-      isNew: true,
-    ),
-    _InternalMemo(
-      title: 'إرشادات السلامة في مقر العمل',
-      date: '24 سبتمبر 2026',
-      category: 'تعميم',
-      body:
-          'يرجى الاطلاع على إرشادات السلامة المحدثة والالتزام بالتعليمات في جميع مرافق العمل.',
-    ),
-    _InternalMemo(
-      title: 'مواعيد تحديث البيانات الوظيفية',
-      date: '18 سبتمبر 2026',
-      category: 'الموارد البشرية',
-      body:
-          'يمكن للموظفين مراجعة بياناتهم الوظيفية وتحديث معلومات التواصل من صفحة الملف الشخصي.',
-    ),
-  ];
-
-  void _showMemo(BuildContext context, _InternalMemo memo) {
+  void _showMemoDetails(BuildContext context, MemoRequest request) {
+    final dateStr = DateFormat('yyyy/MM/dd').format(request.submittedAt);
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(memo.title),
+        title: Text(request.subject),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${memo.category}  •  ${memo.date}',
+              'الحالة: ${request.statusLabel.isNotEmpty ? request.statusLabel : "قيد المراجعة"}  •  $dateStr',
               style: const TextStyle(color: AppTheme.muted, fontSize: 12),
             ),
             const SizedBox(height: 14),
-            Text(memo.body),
+            Text(request.body),
           ],
         ),
         actions: [
@@ -65,7 +43,7 @@ class MemoScreen extends StatelessWidget {
     final submitted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('إرسال طلب للمذكرة'),
+        title: const Text('إرسال طلب مذكرة داخلية'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -81,7 +59,7 @@ class MemoScreen extends StatelessWidget {
                 textAlign: TextAlign.right,
                 onChanged: (value) => body = value,
                 decoration: const InputDecoration(
-                  labelText: 'وصف المذكرة',
+                  labelText: 'تفاصيل المذكرة',
                   alignLabelWithHint: true,
                 ),
               ),
@@ -97,7 +75,7 @@ class MemoScreen extends StatelessWidget {
             onPressed: () {
               if (subject.trim().isEmpty || body.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('أكمل موضوع الطلب وتفاصيله')),
+                  const SnackBar(content: Text('يرجى كتابة عنوان المذكرة وتفاصيلها')),
                 );
                 return;
               }
@@ -108,29 +86,33 @@ class MemoScreen extends StatelessWidget {
         ],
       ),
     );
+
     if (submitted == true && context.mounted) {
       final success = await context.read<PortalProvider>().submitMemoRequest(
-        subject: subject.trim(),
-        body: body.trim(),
-      );
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success ? 'تم إرسال طلب المذكرة' : 'تعذر إرسال طلب المذكرة',
+            subject: subject.trim(),
+            body: body.trim(),
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success ? 'تم إرسال المذكرة بنجاح' : 'تعذر إرسال المذكرة',
+            ),
           ),
-        ),
-      );
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final requests = context.watch<PortalProvider>().myMemoRequests;
+    final provider = context.watch<PortalProvider>();
+    final myRequests = provider.myMemoRequests;
+
     return Scaffold(
       backgroundColor: AppTheme.surface,
       appBar: AppBar(
-        title: const Text('المذكرة الداخلية'),
+        title: const Text('المذكرات الداخلية'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_forward_rounded),
           onPressed: () => Navigator.pop(context),
@@ -142,199 +124,146 @@ class MemoScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => _composeRequest(context),
-                  icon: const Icon(Icons.add_comment_rounded),
-                  label: const Text('إرسال طلب للمذكرة الداخلية'),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'طلباتي المرسلة',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 10),
-              if (requests.isEmpty)
-                const Text(
-                  'لا توجد طلبات مرسلة',
-                  style: TextStyle(color: AppTheme.muted),
-                )
-              else
-                ...requests.map(
-                  (request) => Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFECE6DE)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'المرسل: ${request.employeeName}',
-                          style: const TextStyle(
-                            color: AppTheme.muted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          request.subject,
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          request.body,
-                          style: const TextStyle(
-                            color: AppTheme.muted,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          request.statusLabel,
-                          style: TextStyle(
-                            color: request.statusLabel == 'مرفوض'
-                                ? AppTheme.danger
-                                : request.statusLabel == 'تمت الإحالة'
-                                ? AppTheme.success
-                                : AppTheme.warning,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 18),
-              const Text(
-                'التعاميم الداخلية',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 10),
-              ..._memos.map(
-                (memo) => _InternalMemoCard(
-                  memo: memo,
-                  onTap: () => _showMemo(context, memo),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InternalMemoCard extends StatelessWidget {
-  final _InternalMemo memo;
-  final VoidCallback onTap;
-
-  const _InternalMemoCard({required this.memo, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFECE6DE)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
               Container(
-                width: 46,
-                height: 46,
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: AppTheme.accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
+                  gradient: const LinearGradient(
+                    begin: Alignment.centerRight,
+                    end: Alignment.centerLeft,
+                    colors: [AppTheme.primary, Color(0xFF1C7B8F)],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
                 ),
-                child: const Icon(
-                  Icons.sticky_note_2_rounded,
-                  color: AppTheme.accent,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            memo.title,
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                        if (memo.isNew)
-                          const Text(
-                            'جديد',
-                            style: TextStyle(
-                              color: AppTheme.success,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      memo.category,
-                      style: const TextStyle(
-                        color: AppTheme.primary,
-                        fontSize: 12,
+                    const Text('المراسلات والمذكرات', style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'المذكرات الداخلية الرسمية',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      memo.date,
-                      style: const TextStyle(
-                        color: AppTheme.muted,
-                        fontSize: 12,
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppTheme.primary,
                       ),
+                      onPressed: () => _composeRequest(context),
+                      icon: const Icon(Icons.edit_note_rounded),
+                      label: const Text('كتابة مذكرة جديدة'),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 6),
-              const Icon(Icons.chevron_left_rounded, color: AppTheme.muted),
+              const SizedBox(height: 22),
+              const Text(
+                'سجل مذكراتي',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              if (myRequests.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFECE6DE)),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.notes_rounded, size: 48, color: AppTheme.muted),
+                      SizedBox(height: 12),
+                      Text(
+                        'لا توجد مذكرات داخلية مسجلة حتى الآن',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'يمكنك إرسال طلب مذكرة جديدة عبر الزر أعلاه',
+                        style: TextStyle(color: AppTheme.muted, fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ...myRequests.map(
+                  (request) => Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    child: InkWell(
+                      onTap: () => _showMemoDetails(context, request),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFECE6DE)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.description_rounded, color: AppTheme.primary),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    request.subject,
+                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    request.body,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: AppTheme.muted, fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    request.statusLabel,
+                                    style: TextStyle(
+                                      color: request.statusLabel == 'مرفوض'
+                                          ? AppTheme.danger
+                                          : request.statusLabel == 'تمت الإحالة' || request.statusLabel == 'موافق عليه'
+                                              ? AppTheme.success
+                                              : AppTheme.warning,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_left_rounded, color: AppTheme.muted),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
     );
   }
-}
-
-class _InternalMemo {
-  final String title;
-  final String date;
-  final String category;
-  final String body;
-  final bool isNew;
-
-  const _InternalMemo({
-    required this.title,
-    required this.date,
-    required this.category,
-    required this.body,
-    this.isNew = false,
-  });
 }

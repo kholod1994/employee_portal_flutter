@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/consumable.dart';
+import '../models/workflow_request.dart';
+import '../providers/portal_provider.dart';
 
 class ConsumablesScreen extends StatefulWidget {
   const ConsumablesScreen({super.key});
@@ -18,58 +21,91 @@ class _ConsumablesScreenState extends State<ConsumablesScreen> {
 
   int _nextDraftId = 2;
 
-  // Mock data for demonstration
-  final List<ConsumableRequest> _myRequests = [
-    ConsumableRequest(
-      id: '1',
-      employeeName: 'أحمد محمد',
-      employeeNumber: 'EMP001',
-      items: [
-        ConsumableItem(name: 'أقلام', quantity: 10),
-        ConsumableItem(name: 'دفاتر', quantity: 5),
-      ],
-      notes: 'أحتاجها للعمل اليومي',
-      submittedAt: BigInt.from(DateTime.now().subtract(const Duration(days: 2)).millisecondsSinceEpoch),
-      decidedAt: null,
-      status: ConsumableStatus.pending,
-      stage: ApprovalStage.directManager,
-      currentApproverName: 'المدير المباشر',
-    ),
-  ];
+  final List<ConsumableRequest> _myRequests = [];
+  final List<ConsumableRequest> _pendingApprovals = [];
+  final List<ConsumableRequest> _processedApprovals = [];
 
-  final List<ConsumableRequest> _pendingApprovals = [
-    ConsumableRequest(
-      id: '2',
-      employeeName: 'سارة علي',
-      employeeNumber: 'EMP002',
-      items: [
-        ConsumableItem(name: 'ورق A4', quantity: 20),
-      ],
-      notes: 'للطباعة',
-      submittedAt: BigInt.from(DateTime.now().subtract(const Duration(hours: 5)).millisecondsSinceEpoch),
-      decidedAt: null,
-      status: ConsumableStatus.pending,
-      stage: ApprovalStage.directManager,
-    ),
-  ];
+  bool get _isManager {
+    try {
+      return context.read<PortalProvider>().isManager;
+    } catch (_) {
+      return false;
+    }
+  }
 
-  final List<ConsumableRequest> _processedApprovals = [
-    ConsumableRequest(
-      id: '3',
-      employeeName: 'خالد عمر',
-      employeeNumber: 'EMP003',
-      items: [
-        ConsumableItem(name: 'مكبر صوت', quantity: 1),
-      ],
-      notes: 'للاجتماعات',
-      submittedAt: BigInt.from(DateTime.now().subtract(const Duration(days: 5)).millisecondsSinceEpoch),
-      decidedAt: BigInt.from(DateTime.now().subtract(const Duration(days: 4)).millisecondsSinceEpoch),
-      status: ConsumableStatus.approved,
-      stage: ApprovalStage.completed,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadRealRequests();
+    });
+  }
 
-  bool get _isManager => true; // Mock: determine if user is manager
+  void _loadRealRequests() {
+    if (!mounted) return;
+    final provider = context.read<PortalProvider>();
+    final myReqs = provider.myConsumableRequests;
+    setState(() {
+      _myRequests.clear();
+      for (final r in myReqs) {
+        final mappedItems = r.items.isNotEmpty
+            ? r.items
+                .map((i) => ConsumableItem(
+                      name: i['name']?.toString() ?? 'بند',
+                      quantity: int.tryParse(i['quantity']?.toString() ?? '1') ?? 1,
+                    ))
+                .toList()
+            : [ConsumableItem(name: r.title.isNotEmpty ? r.title : 'طلب مستلزمات', quantity: 1)];
+        final parsedDate = DateTime.tryParse(r.date) ?? DateTime.now();
+
+        _myRequests.add(ConsumableRequest(
+          id: r.id,
+          employeeName: provider.employee?.name ?? '',
+          employeeNumber: provider.employee?.employeeNumber ?? '',
+          items: mappedItems,
+          notes: r.details,
+          submittedAt: BigInt.from(parsedDate.millisecondsSinceEpoch),
+          status: r.status == RequestStatus.approved
+              ? ConsumableStatus.approved
+              : (r.status == RequestStatus.rejected ? ConsumableStatus.rejected : ConsumableStatus.pending),
+          stage: ApprovalStage.directManager,
+        ));
+      }
+
+      final teamReqs = provider.teamConsumableRequests;
+      _pendingApprovals.clear();
+      _processedApprovals.clear();
+      for (final r in teamReqs) {
+        final mappedItems = r.items.isNotEmpty
+            ? r.items
+                .map((i) => ConsumableItem(
+                      name: i['name']?.toString() ?? 'بند',
+                      quantity: int.tryParse(i['quantity']?.toString() ?? '1') ?? 1,
+                    ))
+                .toList()
+            : [ConsumableItem(name: r.title.isNotEmpty ? r.title : 'طلب مستلزمات', quantity: 1)];
+        final parsedDate = DateTime.tryParse(r.date) ?? DateTime.now();
+
+        final req = ConsumableRequest(
+          id: r.id,
+          employeeName: r.employeeName,
+          employeeNumber: r.employeeId,
+          items: mappedItems,
+          notes: r.details,
+          submittedAt: BigInt.from(parsedDate.millisecondsSinceEpoch),
+          status: r.status == RequestStatus.approved
+              ? ConsumableStatus.approved
+              : (r.status == RequestStatus.rejected ? ConsumableStatus.rejected : ConsumableStatus.pending),
+          stage: ApprovalStage.directManager,
+        );
+        if (r.status == RequestStatus.pending) {
+          _pendingApprovals.add(req);
+        } else {
+          _processedApprovals.add(req);
+        }
+      }
+    });
+  }
 
   List<ConsumableItem> get _validItems {
     return _draftItems
@@ -114,7 +150,7 @@ class _ConsumablesScreenState extends State<ConsumablesScreen> {
     });
   }
 
-  void _handleSubmit() {
+  void _handleSubmit() async {
     setState(() {
       _formError = null;
       _showSuccess = false;
@@ -131,22 +167,43 @@ class _ConsumablesScreenState extends State<ConsumablesScreen> {
       _isSubmitting = true;
     });
 
-    // Simulate API call
-    Future.delayed(const Duration(seconds: 1), () {
-      setState(() {
-        _isSubmitting = false;
-        _showSuccess = true;
-        _draftItems.clear();
-        _draftItems.add(DraftItem(id: _nextDraftId++, name: '', quantity: '1'));
-        _notesController.clear();
-      });
+    try {
+      final itemsPayload = _validItems
+          .map((i) => {'name': i.name, 'quantity': i.quantity})
+          .toList();
+      final success = await context.read<PortalProvider>().submitConsumableRequest(
+            items: itemsPayload,
+            reason: _notesController.text.trim(),
+          );
 
-      Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
         setState(() {
-          _showSuccess = false;
+          _isSubmitting = false;
+          if (success) {
+            _showSuccess = true;
+            _draftItems.clear();
+            _draftItems.add(DraftItem(id: _nextDraftId++, name: '', quantity: '1'));
+            _notesController.clear();
+            _loadRealRequests();
+          } else {
+            _formError = 'تعذر إرسال الطلب، يرجى المحاولة لاحقاً';
+          }
         });
-      });
-    });
+
+        if (success) {
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) setState(() => _showSuccess = false);
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _formError = 'خطأ في إرسال الطلب: $e';
+        });
+      }
+    }
   }
 
   String _formatDateTime(BigInt timestamp) {

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../core/theme/app_theme.dart';
+import '../models/workflow_request.dart';
 import '../providers/portal_provider.dart';
 import '../widgets/employee_photo.dart';
 import '../widgets/portal_bottom_navigation.dart';
@@ -257,8 +258,14 @@ class HomeScreen extends StatelessWidget {
                     title: 'الإجازات',
                     description: 'الطلبات ورصيد الإجازة',
                     route: '/leave',
-                    indicator: 'قيد المراجعة',
-                    indicatorColor: const Color(0xFFF59E0B),
+                    indicator: provider.myLeaveRequests.any((r) => r.status == RequestStatus.pending)
+                        ? 'قيد المراجعة'
+                        : ((provider.leaveBalance['remaining'] ?? 0) > 0
+                            ? '${provider.leaveBalance['remaining']} يوم متبقي'
+                            : 'رصيد الإجازات'),
+                    indicatorColor: provider.myLeaveRequests.any((r) => r.status == RequestStatus.pending)
+                        ? const Color(0xFFF59E0B)
+                        : const Color(0xFF10B981),
                   ),
                   _ServiceCard(
                     icon: Icons.inventory_2_rounded,

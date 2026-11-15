@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../core/theme/app_theme.dart';
+import '../providers/portal_provider.dart';
+import '../services/api_service.dart';
 
 class EvaluationScreen extends StatefulWidget {
   const EvaluationScreen({super.key});
@@ -11,18 +14,57 @@ class EvaluationScreen extends StatefulWidget {
 
 class _EvaluationScreenState extends State<EvaluationScreen> {
   bool _requestSent = false;
+  bool _isLoading = true;
+  List<_AnnualEvaluation> _evaluations = [];
 
-  static const _evaluations = [
-    _AnnualEvaluation(year: '2025', score: 4.7, rating: 'متميز'),
-    _AnnualEvaluation(year: '2024', score: 4.4, rating: 'يفوق التوقعات'),
-    _AnnualEvaluation(year: '2023', score: 4.2, rating: 'يفوق التوقعات'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadEvaluations();
+    });
+  }
 
-  void _requestEvaluation() {
+  Future<void> _loadEvaluations() async {
+    final employee = context.read<PortalProvider>().employee;
+    if (employee == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    try {
+      final data = await ApiService.getEvaluations(employee.id);
+      final list = data.map((d) {
+        return _AnnualEvaluation(
+          year: d['year']?.toString() ?? '',
+          score: double.tryParse(d['score']?.toString() ?? '0') ?? 0.0,
+          rating: d['comment']?.toString() ?? d['rating']?.toString() ?? 'تقييم معتمد',
+        );
+      }).toList();
+      if (mounted) {
+        setState(() {
+          _evaluations = list;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _requestEvaluation() async {
+    final employee = context.read<PortalProvider>().employee;
+    if (employee == null) return;
     setState(() => _requestSent = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم إرسال طلب التقييم السنوي')),
-    );
+    final success = await ApiService.submitEvaluationRequest(employee.id);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success
+              ? 'تم إرسال طلب التقييم السنوي بنجاح'
+              : 'تم تسجيل طلب التقييم السنوي'),
+        ),
+      );
+    }
   }
 
   @override
@@ -37,74 +79,106 @@ class _EvaluationScreenState extends State<EvaluationScreen> {
         ),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.centerRight,
-                  end: Alignment.centerLeft,
-                  colors: [AppTheme.primary, Color(0xFF1C7B8F)],
-                ),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Row(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
-                  Icon(Icons.stars_rounded, color: Colors.white, size: 32),
-                  SizedBox(width: 13),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.centerRight,
+                        end: Alignment.centerLeft,
+                        colors: [AppTheme.primary, Color(0xFF1C7B8F)],
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: const Row(
                       children: [
-                        Text('التقييمات السنوية', style: TextStyle(color: Colors.white70)),
-                        SizedBox(height: 4),
-                        Text('سجل الأداء الوظيفي', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+                        Icon(Icons.stars_rounded, color: Colors.white, size: 32),
+                        SizedBox(width: 13),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('التقييمات السنوية', style: TextStyle(color: Colors.white70)),
+                              SizedBox(height: 4),
+                              Text('سجل الأداء الوظيفي',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800)),
+                            ],
+                          ),
+                        ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  const Text('نتائج السنوات السابقة',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 12),
+                  if (_evaluations.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(28),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFECE6DE)),
+                      ),
+                      child: const Column(
+                        children: [
+                          Icon(Icons.workspace_premium_outlined, size: 48, color: AppTheme.muted),
+                          SizedBox(height: 12),
+                          Text(
+                            'لا توجد تقييمات سنوية مسجلة حتى الآن',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                            textAlign: TextAlign.center,
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'ستظهر نتائج تقييم الأداء هنا فور اعتمادها من الإدارة',
+                            style: TextStyle(color: AppTheme.muted, fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ..._evaluations.map((evaluation) => _EvaluationCard(evaluation: evaluation)),
+                  if (_requestSent)
+                    Container(
+                      margin: const EdgeInsets.only(top: 14, bottom: 12),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.warning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.hourglass_top_rounded, color: AppTheme.warning),
+                          SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              'طلب التقييم السنوي قيد المراجعة',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _requestSent ? null : _requestEvaluation,
+                      icon: Icon(_requestSent ? Icons.check_rounded : Icons.add_task_rounded),
+                      label: Text(_requestSent ? 'تم إرسال الطلب' : 'طلب تقييم سنوي'),
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 22),
-            Row(
-              children: [
-                const Expanded(
-                  child: Text('نتائج السنوات السابقة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                ),
-                Text('بيانات تجريبية', style: TextStyle(color: AppTheme.muted.withValues(alpha: 0.85), fontSize: 11)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ..._evaluations.map((evaluation) => _EvaluationCard(evaluation: evaluation)),
-            if (_requestSent)
-              Container(
-                margin: const EdgeInsets.only(top: 6, bottom: 12),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppTheme.warning.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.hourglass_top_rounded, color: AppTheme.warning),
-                    SizedBox(width: 9),
-                    Expanded(child: Text('طلب التقييم السنوي قيد المراجعة', style: TextStyle(fontWeight: FontWeight.w700))),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _requestSent ? null : _requestEvaluation,
-                icon: Icon(_requestSent ? Icons.check_rounded : Icons.add_task_rounded),
-                label: Text(_requestSent ? 'تم إرسال الطلب' : 'طلب تقييم سنوي'),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -141,7 +215,8 @@ class _EvaluationCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('التقييم السنوي ${evaluation.year}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                Text('التقييم السنوي ${evaluation.year}',
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
                 Text(evaluation.rating, style: const TextStyle(color: AppTheme.muted, fontSize: 12)),
               ],
@@ -149,7 +224,8 @@ class _EvaluationCard extends StatelessWidget {
           ),
           const Icon(Icons.star_rounded, color: AppTheme.warning, size: 19),
           const SizedBox(width: 4),
-          Text(evaluation.score.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w800)),
+          Text(evaluation.score.toStringAsFixed(1),
+              style: const TextStyle(fontWeight: FontWeight.w800)),
         ],
       ),
     );

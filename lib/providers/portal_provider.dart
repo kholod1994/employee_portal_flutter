@@ -22,9 +22,9 @@ class PortalProvider extends ChangeNotifier {
   String? _leaveTypesError;
   final _storage = const SafeStorage();
   Map<String, int> _leaveBalance = const {
-    'annual': 15,
-    'used': 5,
-    'remaining': 10,
+    'annual': 0,
+    'used': 0,
+    'remaining': 0,
   };
   List<Map<String, dynamic>> _leaveTypeBalances = const [];
   PayrollSummary? _payrollSummary;
@@ -755,7 +755,6 @@ class PortalProvider extends ChangeNotifier {
         await _reloadTeamLeaveAndPermitRequests();
       } else {
         _teamRequests = const [];
-        _myPortalRequests = const [];
       }
       return result;
     } catch (error) {
@@ -807,8 +806,17 @@ class PortalProvider extends ChangeNotifier {
     _employee = null;
     _isAuthenticated = false;
     _attendance = const [];
-    _leaveBalance = const {'annual': 15, 'used': 5, 'remaining': 10};
+    _leaveBalance = const {'annual': 0, 'used': 0, 'remaining': 0};
+    _leaveTypeBalances = const [];
     _payrollSummary = null;
+    _leaveRequests.clear();
+    _permitRequests.clear();
+    _memoRequests.clear();
+    _myPortalRequests = const [];
+    _supportTickets.clear();
+    _advanceRequests.clear();
+    _teamEvaluations.clear();
+    _teamMembers.clear();
     _teamRequests = const [];
     _notifications = const [];
     _shownNotificationIds.clear();
