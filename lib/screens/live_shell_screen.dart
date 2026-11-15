@@ -159,7 +159,7 @@ class _LiveShellScreenState extends State<LiveShellScreen> {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [AppTheme.primary, AppTheme.secondary],
+                  colors: [AppTheme.primary, Color(0xFF0F4C75)],
                 ),
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
