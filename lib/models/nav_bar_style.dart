@@ -1,35 +1,34 @@
 enum NavBarStyle {
-  neonWave,       // نمط 1: التموج النيون المشع (Fluid wave with neon contour)
-  spotlightBeam,  // نمط 2: إضاءة الكشاف العلوية (Overhead neon beam light)
-  floatingBubble, // نمط 3: الفقاعة المنحنية العائمة (Elevated bubble FAB with liquid notch)
-  minimalGlassy,  // نمط 4: الزجاجي الهادئ (Refined frosted pill)
+  v10FloatingDome, // نمط 1: كبسولة V10 المقوسة العائمة (المنيو الأخيرة في الفيديو)
+  neonWave,        // نمط 2: التموج النيون المشع (خلفية صلبة بدون زجاج)
+  spotlightBeam,   // نمط 3: إضاءة الكشاف المركزة (خلفية صلبة)
+  solidCapsule,    // نمط 4: الكبسولة العصرية الهادئة (تصميم صلب ناعم)
 }
 
 extension NavBarStyleExtension on NavBarStyle {
   String get titleAr {
     switch (this) {
+      case NavBarStyle.v10FloatingDome:
+        return 'شريط V10 المقوس (V10 Floating Dome)';
       case NavBarStyle.neonWave:
         return 'التموج المشع (Neon Wave)';
       case NavBarStyle.spotlightBeam:
         return 'إضاءة الكشاف (Spotlight Beam)';
-      case NavBarStyle.floatingBubble:
-        return 'الفقاعة العائمة (Floating Bubble)';
-      case NavBarStyle.minimalGlassy:
-        return 'الزجاجي الهادئ (Minimal Glassy)';
+      case NavBarStyle.solidCapsule:
+        return 'الكبسولة العصرية (Modern Solid Pill)';
     }
   }
 
   String get descriptionAr {
     switch (this) {
+      case NavBarStyle.v10FloatingDome:
+        return 'تصميم V10 المعتمد في الفيديو: كبسولة عائمة صلبة وفخمة مع فقاعة دائرية مشعة ومقوسة للتبويب النشط بدون زجاج';
       case NavBarStyle.neonWave:
-        return 'تموج انسيابي مع خط كونتور نيون مشع يتحرك بسلاسة مع التبويب النشط';
+        return 'تموج انسيابي مع خط كونتور مشع يتحرك بسلاسة بخلفية صلبة فائقة الوضوح';
       case NavBarStyle.spotlightBeam:
-        return 'كشاف ضوئي علوي يركز إشعاعاً مضيئاً على التبويب المختار';
-      case NavBarStyle.floatingBubble:
-        return 'أيقونة بارزة عائمة أعلى الشريط مع انحناء زجاجي متدفق';
-      case NavBarStyle.minimalGlassy:
-        return 'شريط زجاجي عائم بتصميم خفيف وأنيق مع مؤشر نيون ناعم';
+        return 'كشاف ضوئي علوي يركز إشعاعاً مضيئاً على التبويب المختار بخلفية داكنة صلبة';
+      case NavBarStyle.solidCapsule:
+        return 'شريط صلب أنيق عائم مع كبسولة ناعمة ومريحة للعين بدون تأثيرات زجاجية';
     }
   }
 }
-

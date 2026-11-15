@@ -51,19 +51,31 @@ class NavBarStyleSelectorCard extends StatelessWidget {
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: Text(
-                  'شريط التنقل السفلي (Navigation Tabs)',
-                  style: GoogleFonts.cairo(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.ink,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'شريط التنقل السفلي (Navigation Tabs)',
+                      style: GoogleFonts.cairo(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.ink,
+                      ),
+                    ),
+                    Text(
+                      'تصاميم صلبة عصرية وعالية التباين (بدون زجاج)',
+                      style: GoogleFonts.cairo(
+                        fontSize: 11.5,
+                        color: AppTheme.muted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          // 4 Options Grid/List
+          // Style Options List
           Column(
             children: NavBarStyle.values.map((style) {
               final isSelected = style == currentStyle;
@@ -152,12 +164,15 @@ class _StyleOptionTile extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        style.titleAr,
-                        style: GoogleFonts.cairo(
-                          fontSize: 13.5,
-                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
-                          color: isSelected ? const Color(0xFF0D4C6A) : AppTheme.ink,
+                      Flexible(
+                        child: Text(
+                          style.titleAr,
+                          style: GoogleFonts.cairo(
+                            fontSize: 13,
+                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+                            color: isSelected ? const Color(0xFF0D4C6A) : AppTheme.ink,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       if (isSelected) ...[
@@ -170,7 +185,7 @@ class _StyleOptionTile extends StatelessWidget {
                             border: Border.all(color: neonCyan.withValues(alpha: 0.4)),
                           ),
                           child: Text(
-                            'مفعل الآن',
+                            'مفعل',
                             style: GoogleFonts.cairo(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
@@ -226,15 +241,14 @@ class _StyleOptionTile extends StatelessWidget {
 
   IconData _getStyleIcon(NavBarStyle s) {
     switch (s) {
+      case NavBarStyle.v10FloatingDome:
+        return Icons.bubble_chart_rounded;
       case NavBarStyle.neonWave:
         return Icons.waves_rounded;
       case NavBarStyle.spotlightBeam:
         return Icons.highlight_rounded;
-      case NavBarStyle.floatingBubble:
-        return Icons.bubble_chart_rounded;
-      case NavBarStyle.minimalGlassy:
-        return Icons.diamond_outlined;
+      case NavBarStyle.solidCapsule:
+        return Icons.dock_rounded;
     }
   }
 }
-

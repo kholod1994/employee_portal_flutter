@@ -39,7 +39,7 @@ class PortalProvider extends ChangeNotifier {
   List<PortalRequest> _teamRequests = const [];
   List<AppNotification> _notifications = const [];
   final Set<String> _shownNotificationIds = {};
-  NavBarStyle _navBarStyle = NavBarStyle.neonWave;
+  NavBarStyle _navBarStyle = NavBarStyle.v10FloatingDome;
   NavBarStyle get navBarStyle => _navBarStyle;
 
   PortalProvider() {
@@ -58,10 +58,14 @@ class PortalProvider extends ChangeNotifier {
     try {
       final saved = await _storage.read(key: 'nav_bar_style');
       if (saved != null) {
-        _navBarStyle = NavBarStyle.values.firstWhere(
-          (e) => e.name == saved,
-          orElse: () => NavBarStyle.neonWave,
-        );
+        if (saved == 'floatingBubble' || saved == 'minimalGlassy') {
+          _navBarStyle = NavBarStyle.v10FloatingDome;
+        } else {
+          _navBarStyle = NavBarStyle.values.firstWhere(
+            (e) => e.name == saved,
+            orElse: () => NavBarStyle.v10FloatingDome,
+          );
+        }
         notifyListeners();
       }
     } catch (_) {}

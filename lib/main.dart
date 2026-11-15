@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
@@ -53,7 +52,7 @@ class EmployeePortalApp extends StatelessWidget {
         },
         initialRoute: '/',
         routes: {
-          '/': (context) => kIsWeb ? const SplashScreen() : const LiveShellScreen(),
+          '/': (context) => const SplashScreen(),
           '/shell': (context) => const LiveShellScreen(),
           '/splash': (context) => const SplashScreen(),
           '/login': (context) => const LoginScreen(),

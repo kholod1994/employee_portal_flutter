@@ -1,8 +1,6 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/theme/app_theme.dart';
 import '../models/nav_bar_style.dart';
 
 class NavItemData {
@@ -38,8 +36,9 @@ class GlassyNavBar extends StatefulWidget {
 }
 
 class _GlassyNavBarState extends State<GlassyNavBar> {
-  // App brand colors matching the video & corporate identity
   static const Color neonCyan = Color(0xFF2DD4BF);
+  static const Color solidBarBg = Color(0xFF0F172A); // Solid Slate 900 (non-glassy)
+  static const Color solidBorder = Color(0xFF1E293B);
 
   double _lastIndex = 0;
 
@@ -77,11 +76,10 @@ class _GlassyNavBarState extends State<GlassyNavBar> {
                 begin: _lastIndex,
                 end: widget.selectedIndex.toDouble(),
               ),
-              duration: const Duration(milliseconds: 380),
+              duration: const Duration(milliseconds: 350),
               curve: Curves.easeOutCubic,
               builder: (context, animIndex, child) {
-                // In RTL, Row child 0 is on the far right, and child (count - 1) is on the far left.
-                // We map animIndex to visual coordinate space so the glow/bubble aligns precisely with the active tab.
+                // RTL mapping for visual alignment
                 final visualIndex = isRtl ? (count - 1 - animIndex) : animIndex;
                 final activeCenter = (visualIndex + 0.5) * tabWidth;
 
@@ -90,9 +88,9 @@ class _GlassyNavBarState extends State<GlassyNavBar> {
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      // 1. Background Frosted Glass Container
+                      // 1. Solid Clean Background Container (NO glass / NO blur)
                       Positioned.fill(
-                        child: _buildGlassBackground(activeCenter, tabWidth, totalWidth),
+                        child: _buildSolidBackground(activeCenter, tabWidth, totalWidth),
                       ),
 
                       // 2. Style-Specific Active Visual Overlay
@@ -122,7 +120,7 @@ class _GlassyNavBarState extends State<GlassyNavBar> {
                             ),
                           ),
                         )
-                      else if (widget.style == NavBarStyle.minimalGlassy)
+                      else if (widget.style == NavBarStyle.solidCapsule)
                         Positioned(
                           left: activeCenter - 30,
                           top: 10,
@@ -130,16 +128,16 @@ class _GlassyNavBarState extends State<GlassyNavBar> {
                             width: 60,
                             height: 44,
                             decoration: BoxDecoration(
-                              color: neonCyan.withValues(alpha: 0.14),
+                              color: neonCyan.withValues(alpha: 0.16),
                               borderRadius: BorderRadius.circular(22),
                               border: Border.all(
-                                color: neonCyan.withValues(alpha: 0.35),
-                                width: 1.2,
+                                color: neonCyan.withValues(alpha: 0.5),
+                                width: 1.4,
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: neonCyan.withValues(alpha: 0.2),
-                                  blurRadius: 12,
+                                  color: neonCyan.withValues(alpha: 0.25),
+                                  blurRadius: 10,
                                   spreadRadius: 1,
                                 ),
                               ],
@@ -147,8 +145,8 @@ class _GlassyNavBarState extends State<GlassyNavBar> {
                           ),
                         ),
 
-                      // 3. Floating Bubble for Style 3
-                      if (widget.style == NavBarStyle.floatingBubble)
+                      // 3. V10 Floating Dome / Bubble (المنيو الأخيرة في الفيديو)
+                      if (widget.style == NavBarStyle.v10FloatingDome)
                         Positioned(
                           left: activeCenter - 27,
                           top: -16,
@@ -168,12 +166,12 @@ class _GlassyNavBarState extends State<GlassyNavBar> {
                                   ],
                                 ),
                                 border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.6),
-                                  width: 2,
+                                  color: Colors.white,
+                                  width: 2.2,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: neonCyan.withValues(alpha: 0.5),
+                                    color: neonCyan.withValues(alpha: 0.55),
                                     blurRadius: 16,
                                     offset: const Offset(0, 4),
                                     spreadRadius: 2,
@@ -197,7 +195,7 @@ class _GlassyNavBarState extends State<GlassyNavBar> {
                           children: List.generate(count, (index) {
                             final item = widget.items[index];
                             final isSelected = index == widget.selectedIndex;
-                            final isBubbleActive = widget.style == NavBarStyle.floatingBubble && isSelected;
+                            final isV10Active = widget.style == NavBarStyle.v10FloatingDome && isSelected;
 
                             return Expanded(
                               child: Material(
@@ -210,8 +208,7 @@ class _GlassyNavBarState extends State<GlassyNavBar> {
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      // If bubble active in Style 3, keep spacer for elevated bubble
-                                      if (isBubbleActive)
+                                      if (isV10Active)
                                         const SizedBox(height: 28)
                                       else ...[
                                         AnimatedScale(
@@ -222,8 +219,8 @@ class _GlassyNavBarState extends State<GlassyNavBar> {
                                             isSelected ? item.selectedIcon : item.icon,
                                             size: 24,
                                             color: isSelected
-                                                ? (widget.style == NavBarStyle.minimalGlassy ? AppTheme.primary : neonCyan)
-                                                : Colors.white.withValues(alpha: 0.6),
+                                                ? neonCyan
+                                                : const Color(0xFF94A3B8),
                                           ),
                                         ),
                                         const SizedBox(height: 4),
@@ -233,32 +230,30 @@ class _GlassyNavBarState extends State<GlassyNavBar> {
                                             fontSize: 11,
                                             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                                             color: isSelected
-                                                ? (widget.style == NavBarStyle.minimalGlassy ? AppTheme.primary : Colors.white)
-                                                : Colors.white.withValues(alpha: 0.55),
+                                                ? Colors.white
+                                                : const Color(0xFF94A3B8),
                                           ),
                                         ),
                                       ],
 
-                                      // Indicator Neon Dot under active item (Styles 1, 2, 4)
-                                      if (isSelected && widget.style != NavBarStyle.floatingBubble) ...[
+                                      if (isSelected && widget.style != NavBarStyle.v10FloatingDome) ...[
                                         const SizedBox(height: 3),
                                         Container(
                                           width: 4.5,
                                           height: 4.5,
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color: widget.style == NavBarStyle.minimalGlassy ? AppTheme.primary : neonCyan,
+                                            color: neonCyan,
                                             boxShadow: [
                                               BoxShadow(
-                                                color: (widget.style == NavBarStyle.minimalGlassy ? AppTheme.primary : neonCyan)
-                                                    .withValues(alpha: 0.8),
+                                                color: neonCyan.withValues(alpha: 0.8),
                                                 blurRadius: 6,
                                                 spreadRadius: 1,
                                               ),
                                             ],
                                           ),
                                         ),
-                                      ] else if (isBubbleActive) ...[
+                                      ] else if (isV10Active) ...[
                                         Text(
                                           item.label,
                                           style: GoogleFonts.cairo(
@@ -288,67 +283,49 @@ class _GlassyNavBarState extends State<GlassyNavBar> {
     );
   }
 
-  Widget _buildGlassBackground(double activeCenter, double tabWidth, double totalWidth) {
-    if (widget.style == NavBarStyle.floatingBubble) {
+  Widget _buildSolidBackground(double activeCenter, double tabWidth, double totalWidth) {
+    if (widget.style == NavBarStyle.v10FloatingDome) {
       return ClipPath(
         clipper: LiquidNotchClipper(
           activeCenter: activeCenter,
           notchWidth: 70,
-          notchDepth: 18,
+          notchDepth: 16,
           borderRadius: 34,
         ),
-        child: _glassContainerDecoration(),
+        child: _solidContainerDecoration(),
       );
     }
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(34),
-      child: _glassContainerDecoration(),
+      child: _solidContainerDecoration(),
     );
   }
 
-  Widget _glassContainerDecoration() {
-    final isMinimal = widget.style == NavBarStyle.minimalGlassy;
-
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(34),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isMinimal
-                ? [
-                    const Color(0xFFF1F5F9).withValues(alpha: 0.88),
-                    const Color(0xFFE2E8F0).withValues(alpha: 0.82),
-                  ]
-                : [
-                    const Color(0xFF0B1E2B).withValues(alpha: 0.86),
-                    const Color(0xFF07141E).withValues(alpha: 0.92),
-                  ],
-          ),
-          border: Border.all(
-            color: isMinimal
-                ? Colors.white.withValues(alpha: 0.8)
-                : Colors.white.withValues(alpha: 0.18),
-            width: 1.2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.primaryDark.withValues(alpha: isMinimal ? 0.12 : 0.4),
-              blurRadius: 28,
-              offset: const Offset(0, 10),
-              spreadRadius: 2,
-            ),
-          ],
+  // 100% Solid Container Decoration - NO BackdropFilter, NO Blur, NO Glass
+  Widget _solidContainerDecoration() {
+    return Container(
+      decoration: BoxDecoration(
+        color: solidBarBg,
+        borderRadius: BorderRadius.circular(34),
+        border: Border.all(
+          color: solidBorder,
+          width: 1.2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+            spreadRadius: 1,
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Custom painter for Style 1: Neon Wave Contour
+/// Custom painter for Style: Neon Wave Contour
 class NeonWaveContourPainter extends CustomPainter {
   final double activeCenter;
   final double waveWidth;
@@ -369,7 +346,6 @@ class NeonWaveContourPainter extends CustomPainter {
     final startX = activeCenter - half;
     final endX = activeCenter + half;
 
-    // Glowing Neon Stroke
     final glowPaint = Paint()
       ..color = neonColor.withValues(alpha: 0.6)
       ..style = PaintingStyle.stroke
@@ -393,7 +369,6 @@ class NeonWaveContourPainter extends CustomPainter {
       path.moveTo(0, 0);
     }
 
-    // Smooth wave arch peaking over active tab
     path.cubicTo(
       activeCenter - half * 0.45,
       0,
@@ -428,7 +403,7 @@ class NeonWaveContourPainter extends CustomPainter {
   }
 }
 
-/// Custom painter for Style 2: Spotlight Beam
+/// Custom painter for Style: Spotlight Beam
 class SpotlightBeamPainter extends CustomPainter {
   final double activeCenter;
   final double lightWidth;
@@ -447,7 +422,6 @@ class SpotlightBeamPainter extends CustomPainter {
     final topHalf = lightWidth / 2;
     final bottomHalf = beamBottomWidth / 2;
 
-    // 1. Trapezoid Light Beam Path
     final beamPath = Path();
     beamPath.moveTo(activeCenter - topHalf, 0);
     beamPath.lineTo(activeCenter + topHalf, 0);
@@ -469,7 +443,6 @@ class SpotlightBeamPainter extends CustomPainter {
 
     canvas.drawPath(beamPath, beamPaint);
 
-    // 2. Overhead Bright Lamp Bar on Top Border
     final lampRect = RRect.fromRectAndRadius(
       Rect.fromCenter(
         center: Offset(activeCenter, 1.5),
@@ -497,7 +470,7 @@ class SpotlightBeamPainter extends CustomPainter {
   }
 }
 
-/// Custom clipper for Style 3: Liquid Notch
+/// Custom clipper for V10 Liquid Notch
 class LiquidNotchClipper extends CustomClipper<Path> {
   final double activeCenter;
   final double notchWidth;
@@ -518,17 +491,14 @@ class LiquidNotchClipper extends CustomClipper<Path> {
     final nStart = activeCenter - half;
     final nEnd = activeCenter + half;
 
-    // Rounded Outer Boundary
     path.moveTo(borderRadius, 0);
 
-    // Leading segment before notch
     if (nStart > borderRadius) {
       path.lineTo(nStart, 0);
     } else {
       path.lineTo(borderRadius, 0);
     }
 
-    // Smooth concave liquid valley
     path.cubicTo(
       activeCenter - half * 0.5,
       0,
@@ -546,28 +516,24 @@ class LiquidNotchClipper extends CustomClipper<Path> {
       0,
     );
 
-    // Top right edge
     path.lineTo(size.width - borderRadius, 0);
     path.arcToPoint(
       Offset(size.width, borderRadius),
       radius: Radius.circular(borderRadius),
     );
 
-    // Bottom right
     path.lineTo(size.width, size.height - borderRadius);
     path.arcToPoint(
       Offset(size.width - borderRadius, size.height),
       radius: Radius.circular(borderRadius),
     );
 
-    // Bottom left
     path.lineTo(borderRadius, size.height);
     path.arcToPoint(
       Offset(0, size.height - borderRadius),
       radius: Radius.circular(borderRadius),
     );
 
-    // Top left
     path.lineTo(0, borderRadius);
     path.arcToPoint(
       Offset(borderRadius, 0),
@@ -585,4 +551,3 @@ class LiquidNotchClipper extends CustomClipper<Path> {
         oldClipper.notchDepth != notchDepth;
   }
 }
-
