@@ -5,6 +5,7 @@ import '../core/storage/safe_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../config/app_config.dart';
 import '../providers/portal_provider.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
@@ -372,7 +373,7 @@ class _SplashScreenState extends State<SplashScreen>
               child: Opacity(
                 opacity: _taglineFade.value * 0.7,
                 child: Text(
-                  'AL DALEEL FOR IT & GIS • V2.0',
+                  'AL DALEEL FOR IT & GIS • V${AppConfig.appVersion}',
                   style: GoogleFonts.cairo(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,

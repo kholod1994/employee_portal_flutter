@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../config/app_config.dart';
 import '../core/theme/app_theme.dart';
 import '../models/workflow_request.dart';
 import '../providers/portal_provider.dart';
@@ -342,6 +344,37 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
               ],
+              const SizedBox(height: 28),
+              Center(
+                child: Column(
+                  children: [
+                    Text(
+                      'شركة الدليل الرقمي لتقنية المعلومات والنظم الجغرافية',
+                      style: GoogleFonts.cairo(
+                        fontSize: 11,
+                        color: AppTheme.muted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        AppConfig.fullVersionString,
+                        style: GoogleFonts.cairo(
+                          fontSize: 10,
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

@@ -1,10 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../config/app_config.dart';
 import '../core/theme/app_theme.dart';
 import '../providers/portal_provider.dart';
 import '../services/api_service.dart';
+import '../services/biometric_service.dart';
 import '../widgets/employee_photo.dart';
 import '../widgets/nav_bar_style_selector.dart';
 import '../widgets/portal_bottom_navigation.dart';
@@ -163,7 +166,12 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
 
-              // 2. Change Password Card
+              // 2. Biometric Authentication Card
+              const _BiometricSettingsCard(),
+
+              const SizedBox(height: 12),
+
+              // 3. Change Password Card
               const _SettingsChangePasswordCard(),
 
               const SizedBox(height: 22),
@@ -232,10 +240,25 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ),
                       subtitle: Text(
-                        'شركة الدليل الرقمي لتقنية المعلومات والنظم الجغرافية - إصدار 1.0.0',
+                        'شركة الدليل الرقمي لتقنية المعلومات والنظم الجغرافية - ${AppConfig.fullVersionString}',
                         style: GoogleFonts.cairo(
                           fontSize: 11,
                           color: AppTheme.muted,
+                        ),
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          AppConfig.displayVersion,
+                          style: GoogleFonts.cairo(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primary,
+                          ),
                         ),
                       ),
                     ),
@@ -667,6 +690,379 @@ class _SettingsChangePasswordDialogState
           ),
         ),
       ),
+    );
+  }
+}
+
+class _BiometricSettingsCard extends StatefulWidget {
+  const _BiometricSettingsCard();
+
+  @override
+  State<_BiometricSettingsCard> createState() => _BiometricSettingsCardState();
+}
+
+class _BiometricSettingsCardState extends State<_BiometricSettingsCard> {
+  bool _canAuthenticate = false;
+  bool _isEnabled = false;
+  String _biometricLabel = 'البصمة أو الوجه';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatus();
+  }
+
+  Future<void> _checkStatus() async {
+    if (kIsWeb) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    try {
+      final canAuth = await BiometricService.canAuthenticate();
+      final enabled = await BiometricService.isBiometricEnabled();
+      final label = await BiometricService.getBiometricLabel();
+      if (mounted) {
+        setState(() {
+          _canAuthenticate = canAuth;
+          _isEnabled = enabled;
+          _biometricLabel = label;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleBiometric(bool value) async {
+    if (value) {
+      // 1. Authenticate with biometrics first
+      final authenticated = await BiometricService.authenticate(
+        localizedReason: 'يرجى تأكيد الهوية لتفعيل تسجيل الدخول بـ $_biometricLabel',
+      );
+      if (!authenticated) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم إلغاء المصادقة الحيوية أو لم يتم التعرف على البصمة'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      // 2. Check if we already have saved credentials
+      final hasCreds = await BiometricService.hasSavedCredentials();
+      if (!hasCreds) {
+        if (!mounted) return;
+        final provider = context.read<PortalProvider>();
+        final employee = provider.employee;
+        final identifier = employee?.employeeNumber ?? employee?.email ?? '';
+
+        final password = await showDialog<String>(
+          context: context,
+          builder: (ctx) => _BiometricPasswordDialog(biometricLabel: _biometricLabel),
+        );
+        if (password == null || password.isEmpty) return;
+        if (!mounted) return;
+
+        if (identifier.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('تعذر تحديد معرف الموظف لحفظ بيانات البصمة'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
+        }
+
+        setState(() => _isLoading = true);
+        final verify = await ApiService.login(identifier, password);
+        setState(() => _isLoading = false);
+
+        if (verify['success'] != true) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('كلمة المرور غير صحيحة، لم يتم تفعيل البصمة'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
+        }
+
+        await BiometricService.saveCredentials(identifier, password);
+      } else {
+        await BiometricService.setBiometricEnabled(true);
+      }
+
+      if (mounted) {
+        setState(() => _isEnabled = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تم تفعيل تسجيل الدخول بـ $_biometricLabel بنجاح'),
+            backgroundColor: const Color(0xFF0D4C6A),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      await BiometricService.setBiometricEnabled(false);
+      if (mounted) {
+        setState(() => _isEnabled = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تم إيقاف تسجيل الدخول بـ $_biometricLabel'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          leading: Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: Colors.blueGrey.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.fingerprint_rounded,
+              color: Colors.blueGrey,
+              size: 22,
+            ),
+          ),
+          title: Text(
+            'تسجيل الدخول بالبصمة / Face ID',
+            style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w800),
+          ),
+          subtitle: Text(
+            'المصادقة الحيوية متوفرة في تطبيق الهاتف المحمول (Android)',
+            style: GoogleFonts.cairo(fontSize: 11, color: AppTheme.muted),
+          ),
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'تطبيق الهاتف',
+              style: GoogleFonts.cairo(
+                fontSize: 11,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!_canAuthenticate && !_isLoading) {
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          leading: Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: Colors.grey.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.fingerprint_rounded,
+              color: Colors.grey,
+              size: 22,
+            ),
+          ),
+          title: Text(
+            'تسجيل الدخول بالبصمة أو الوجه',
+            style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w800),
+          ),
+          subtitle: Text(
+            'الجهاز الحالي لا يحتوي على مستشعر حيوي مفعل أو بصمة مسجلة',
+            style: GoogleFonts.cairo(fontSize: 11, color: AppTheme.muted),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: _isEnabled
+              ? const Color(0xFF0D4C6A).withValues(alpha: 0.3)
+              : Colors.grey.shade200,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _isEnabled
+                ? const Color(0xFF0D4C6A).withValues(alpha: 0.05)
+                : Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: SwitchListTile.adaptive(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        secondary: Container(
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: (_isEnabled ? const Color(0xFF0D4C6A) : Colors.grey.shade400)
+                .withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            _biometricLabel.contains('الوجه')
+                ? Icons.face_rounded
+                : Icons.fingerprint_rounded,
+            color: _isEnabled ? const Color(0xFF0D4C6A) : Colors.grey.shade600,
+            size: 24,
+          ),
+        ),
+        title: Text(
+          'تسجيل الدخول بـ $_biometricLabel',
+          style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          _isEnabled
+              ? 'مفعّل: يمكنك الدخول السريع عبر المصادقة الحيوية'
+              : 'معطّل: اضغط للتفعيل وتسجيل الدخول بلمسة واحدة',
+          style: GoogleFonts.cairo(fontSize: 11, color: AppTheme.muted),
+        ),
+        value: _isEnabled,
+        activeTrackColor: const Color(0xFF0D4C6A),
+        onChanged: _isLoading ? null : (v) => _toggleBiometric(v),
+      ),
+    );
+  }
+}
+
+class _BiometricPasswordDialog extends StatefulWidget {
+  final String biometricLabel;
+  const _BiometricPasswordDialog({required this.biometricLabel});
+
+  @override
+  State<_BiometricPasswordDialog> createState() =>
+      _BiometricPasswordDialogState();
+}
+
+class _BiometricPasswordDialogState extends State<_BiometricPasswordDialog> {
+  final _controller = TextEditingController();
+  bool _obscure = true;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D4C6A).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.fingerprint_rounded,
+                color: Color(0xFF0D4C6A), size: 24),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'تأكيد كلمة المرور',
+              style: GoogleFonts.cairo(
+                  fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'لتفعيل تسجيل الدخول بـ ${widget.biometricLabel}، يرجى إدخال كلمة المرور الحالية لحفظها بأمان داخل الجهاز.',
+            style: GoogleFonts.cairo(
+                fontSize: 13, color: AppTheme.muted, height: 1.5),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            obscureText: _obscure,
+            textAlign: TextAlign.right,
+            decoration: InputDecoration(
+              labelText: 'كلمة المرور الحالية',
+              hintText: 'أدخل كلمة المرور',
+              prefixIcon: const Icon(Icons.lock_outline_rounded),
+              suffixIcon: IconButton(
+                icon: Icon(_obscure
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('إلغاء',
+              style: GoogleFonts.cairo(
+                  color: AppTheme.muted, fontWeight: FontWeight.w700)),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0D4C6A),
+            foregroundColor: Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onPressed: () {
+            final pass = _controller.text.trim();
+            if (pass.isNotEmpty) {
+              Navigator.pop(context, pass);
+            }
+          },
+          child: Text('تأكيد وحفظ',
+              style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+        ),
+      ],
     );
   }
 }

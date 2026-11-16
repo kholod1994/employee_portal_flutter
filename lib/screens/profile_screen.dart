@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../config/app_config.dart';
 import '../core/theme/app_theme.dart';
 import '../models/employee.dart';
 import '../providers/portal_provider.dart';
@@ -229,6 +231,18 @@ class ProfileScreen extends StatelessWidget {
                 const SizedBox(height: 18),
                 _WarningCard(warnings: warnings, formatDate: _formatDate),
               ],
+              const SizedBox(height: 24),
+              Center(
+                child: Text(
+                  AppConfig.fullVersionString,
+                  style: GoogleFonts.cairo(
+                    fontSize: 12,
+                    color: AppTheme.muted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
             ],
           ),
         ),

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../core/storage/safe_storage.dart';
 import '../core/theme/app_theme.dart';
 import '../providers/portal_provider.dart';
 import '../services/app_notification_service.dart';
+import '../services/biometric_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,11 +20,31 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _rememberMe = false;
   final _storage = const SafeStorage();
+  bool _canBiometric = false;
+  bool _hasBiometricCreds = false;
+  String _biometricLabel = 'البصمة أو الوجه';
+  bool _isBiometricLoading = false;
 
   @override
   void initState() {
     super.initState();
     _loadSavedCredentials();
+    _checkBiometric();
+  }
+
+  Future<void> _checkBiometric() async {
+    try {
+      final canAuth = await BiometricService.canAuthenticate();
+      final hasCreds = await BiometricService.hasSavedCredentials();
+      final label = await BiometricService.getBiometricLabel();
+      if (mounted) {
+        setState(() {
+          _canBiometric = canAuth;
+          _hasBiometricCreds = hasCreds;
+          _biometricLabel = label;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadSavedCredentials() async {
@@ -39,6 +62,34 @@ class _LoginScreenState extends State<LoginScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _handleLogin();
       });
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    setState(() => _isBiometricLoading = true);
+    try {
+      final authenticated = await BiometricService.authenticate(
+        localizedReason: 'سجل الدخول باستخدام $_biometricLabel',
+      );
+      if (!authenticated) {
+        setState(() => _isBiometricLoading = false);
+        return;
+      }
+
+      final creds = await BiometricService.getSavedCredentials();
+      if (creds == null) {
+        setState(() => _isBiometricLoading = false);
+        _showMessage('لا توجد بيانات اعتماد محفوظة للمصادقة الحيوية');
+        return;
+      }
+
+      _identifierController.text = creds['identifier']!;
+      _passwordController.text = creds['password']!;
+      setState(() => _isBiometricLoading = false);
+      await _handleLogin();
+    } catch (e) {
+      setState(() => _isBiometricLoading = false);
+      _showMessage('حدث خطأ أثناء المصادقة الحيوية');
     }
   }
 
@@ -75,6 +126,10 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     if (result['success'] == true) {
       await _saveCredentials();
+      final isBioEnabled = await BiometricService.isBiometricEnabled();
+      if (isBioEnabled) {
+        await BiometricService.saveCredentials(identifier, password);
+      }
       await AppNotificationService.requestPermission();
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
@@ -234,6 +289,79 @@ class _LoginScreenState extends State<LoginScreen> {
                           provider.isLoading
                               ? 'جاري تسجيل الدخول...'
                               : 'تسجيل الدخول',
+                        ),
+                      ),
+                    ),
+                    if (_canBiometric && _hasBiometricCreds) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          const Expanded(child: Divider()),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              'أو استخدام',
+                              style: GoogleFonts.cairo(
+                                fontSize: 12,
+                                color: AppTheme.muted,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const Expanded(child: Divider()),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: const BorderSide(
+                              color: AppTheme.primary,
+                              width: 1.5,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            backgroundColor:
+                                AppTheme.primary.withValues(alpha: 0.04),
+                          ),
+                          onPressed: (_isBiometricLoading || provider.isLoading)
+                              ? null
+                              : _handleBiometricLogin,
+                          icon: _isBiometricLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Icon(
+                                  _biometricLabel.contains('الوجه')
+                                      ? Icons.face_rounded
+                                      : Icons.fingerprint_rounded,
+                                  color: AppTheme.primary,
+                                  size: 26,
+                                ),
+                          label: Text(
+                            'الدخول عبر $_biometricLabel',
+                            style: GoogleFonts.cairo(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    Center(
+                      child: Text(
+                        AppConfig.fullVersionString,
+                        style: GoogleFonts.cairo(
+                          fontSize: 11,
+                          color: AppTheme.muted,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
