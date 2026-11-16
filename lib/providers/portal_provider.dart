@@ -231,16 +231,22 @@ class PortalProvider extends ChangeNotifier {
           .map(AppNotification.fromJson)
           .toList(growable: false);
       _notifications = incoming;
+      bool hasNew = false;
       for (final notification in incoming) {
         if (notification.id.isEmpty ||
             !_shownNotificationIds.add(notification.id)) {
           continue;
         }
-        await AppNotificationService.showDecision(
+        hasNew = true;
+        await AppNotificationService.showNotification(
           id: notification.id,
           title: notification.title,
           body: notification.message,
+          payload: notification.type,
         );
+      }
+      if (hasNew && isManager) {
+        _reloadTeamRequests();
       }
       notifyListeners();
     } catch (error) {
@@ -272,7 +278,7 @@ class PortalProvider extends ChangeNotifier {
   void _startNotificationPolling() {
     _notificationTimer?.cancel();
     _notificationTimer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(seconds: 15),
       (_) => _refreshNotifications(),
     );
   }

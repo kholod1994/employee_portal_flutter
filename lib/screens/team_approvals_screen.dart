@@ -16,7 +16,7 @@ class TeamApprovalsScreen extends StatelessWidget {
     }
 
     return DefaultTabController(
-      length: 5,
+      length: 4,
       child: Scaffold(
         backgroundColor: AppTheme.surface,
         appBar: AppBar(
