@@ -1,9 +1,11 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+
 import '../config/app_config.dart';
 import '../core/storage/safe_storage.dart';
-import '../core/theme/app_theme.dart';
 import '../providers/portal_provider.dart';
 import '../services/app_notification_service.dart';
 import '../services/biometric_service.dart';
@@ -15,32 +17,47 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _rememberMe = false;
+  bool _rememberMe = true;
+  bool _obscurePassword = true;
   final _storage = const SafeStorage();
+
   bool _canBiometric = false;
-  bool _hasBiometricCreds = false;
   String _biometricLabel = 'البصمة أو الوجه';
   bool _isBiometricLoading = false;
+
+  late final AnimationController _flightAnimController;
 
   @override
   void initState() {
     super.initState();
+    _flightAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+
     _loadSavedCredentials();
     _checkBiometric();
+  }
+
+  @override
+  void dispose() {
+    _flightAnimController.dispose();
+    _identifierController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkBiometric() async {
     try {
       final canAuth = await BiometricService.canAuthenticate();
-      final hasCreds = await BiometricService.hasSavedCredentials();
       final label = await BiometricService.getBiometricLabel();
       if (mounted) {
         setState(() {
           _canBiometric = canAuth;
-          _hasBiometricCreds = hasCreds;
           _biometricLabel = label;
         });
       }
@@ -79,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final creds = await BiometricService.getSavedCredentials();
       if (creds == null) {
         setState(() => _isBiometricLoading = false);
-        _showMessage('لا توجد بيانات اعتماد محفوظة للمصادقة الحيوية');
+        _showMessage('يرجى تسجيل الدخول أولاً لتفعيل البصمة تلقائياً');
         return;
       }
 
@@ -97,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_rememberMe) {
       await _storage.write(
         key: 'employeeNumber',
-        value: _identifierController.text,
+        value: _identifierController.text.trim(),
       );
       await _storage.write(key: 'password', value: _passwordController.text);
       await _storage.write(key: 'rememberMe', value: 'true');
@@ -134,251 +151,724 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
     } else {
-      _showMessage(result['error'] ?? 'فشل تسجيل الدخول');
+      _showMessage(result['error'] ?? 'فشل تسجيل الدخول. تحقق من البيانات المدخلة');
     }
   }
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.cairo(fontWeight: FontWeight.w600),
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: const Color(0xFF1E293B),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PortalProvider>();
+    final size = MediaQuery.of(context).size;
+    final topBannerHeight = math.min(size.height * 0.38, 300.0);
+    final isLoading = provider.isLoading || _isBiometricLoading;
 
     return Scaffold(
-      backgroundColor: AppTheme.surface,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFFF9F3EA), Color(0xFFF4F8F9)],
-                  ),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(color: Colors.white, width: 1.2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.12),
-                      blurRadius: 28,
-                      offset: const Offset(0, 18),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 94,
-                      height: 94,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topRight,
-                          end: Alignment.bottomLeft,
-                          colors: [AppTheme.primary, AppTheme.accent],
-                        ),
-                        borderRadius: BorderRadius.circular(28),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primary.withValues(alpha: 0.18),
-                            blurRadius: 18,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
+      backgroundColor: const Color(0xFFE9F0F8),
+      body: Stack(
+        children: [
+          // 1. Scenic Mountain & Travel Landscape Header (matches video top)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: topBannerHeight + 40,
+            child: const _TravelScenicHeader(),
+          ),
+
+          // 2. Main Scrollable Content Overlapping the Banner
+          Positioned.fill(
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: Column(
+                children: [
+                  SizedBox(height: topBannerHeight),
+
+                  // 3. Rounded White Card Sheet (matches video card)
+                  Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(minHeight: 520),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(36),
+                        topRight: Radius.circular(36),
                       ),
-                      padding: const EdgeInsets.all(16),
-                      child: Image.asset(
-                        'assets/images/logo_dallel_white.png',
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => const Icon(
-                          Icons.person_rounded,
-                          size: 46,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'بوابة الموظف',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'منصة الموارد البشرية الذكية',
-                      style: TextStyle(fontSize: 15, color: AppTheme.muted),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'سجّل الدخول بالبريد الإلكتروني أو الرقم الوظيفي وكلمة المرور المسجلين في النظام',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: AppTheme.muted),
-                    ),
-                    const SizedBox(height: 30),
-                    TextFormField(
-                      controller: _identifierController,
-                      keyboardType: TextInputType.emailAddress,
-                      textAlign: TextAlign.right,
-                      decoration: InputDecoration(
-                        labelText: 'البريد الإلكتروني أو الرقم الوظيفي',
-                        hintText: 'أدخل البريد الإلكتروني أو الرقم الوظيفي',
-                        prefixIcon: const Icon(Icons.badge_rounded),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      textAlign: TextAlign.right,
-                      decoration: InputDecoration(
-                        labelText: 'كلمة المرور',
-                        hintText: 'أدخل كلمة المرور',
-                        prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: _rememberMe,
-                          onChanged: (value) {
-                            setState(() {
-                              _rememberMe = value ?? false;
-                            });
-                          },
-                          activeColor: AppTheme.primary,
-                        ),
-                        const Text(
-                          'تذكر بياناتي',
-                          style: TextStyle(fontSize: 14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0x1A0F172A),
+                          blurRadius: 30,
+                          offset: Offset(0, -8),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: provider.isLoading ? null : _handleLogin,
-                        icon: provider.isLoading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                    padding: const EdgeInsets.fromLTRB(26, 32, 26, 40),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title: Welcome back / مرحباً بك مجدداً
+                        Center(
+                          child: Column(
+                            children: [
+                              Text(
+                                'مرحباً بك مجدداً',
+                                style: GoogleFonts.cairo(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF0F172A),
+                                  letterSpacing: -0.5,
                                 ),
-                              )
-                            : const Icon(Icons.login_rounded),
-                        label: Text(
-                          provider.isLoading
-                              ? 'جاري تسجيل الدخول...'
-                              : 'تسجيل الدخول',
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'سجل دخولك لمتابعة الحضور، الرواتب والطلبات',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.cairo(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ),
-                    if (_canBiometric && _hasBiometricCreds) ...[
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          const Expanded(child: Divider()),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              'أو استخدام',
-                              style: GoogleFonts.cairo(
-                                fontSize: 12,
-                                color: AppTheme.muted,
-                                fontWeight: FontWeight.w700,
+
+                        const SizedBox(height: 28),
+
+                        // Input 1: Email or Employee Number
+                        _buildInputField(
+                          controller: _identifierController,
+                          hint: 'البريد الإلكتروني أو الرقم الوظيفي',
+                          icon: Icons.mail_outline_rounded,
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // Input 2: Password with eye toggle
+                        _buildInputField(
+                          controller: _passwordController,
+                          hint: 'أدخل كلمة المرور',
+                          icon: Icons.lock_outline_rounded,
+                          isPassword: true,
+                          obscureText: _obscurePassword,
+                          onToggleVisibility: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Remember me checkbox & Forgot password row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _rememberMe = !_rememberMe;
+                                });
+                              },
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: Checkbox(
+                                      value: _rememberMe,
+                                      onChanged: (val) {
+                                        setState(() {
+                                          _rememberMe = val ?? false;
+                                        });
+                                      },
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(5),
+                                      ),
+                                      activeColor: const Color(0xFF1E3A8A),
+                                      side: const BorderSide(
+                                        color: Color(0xFFCBD5E1),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'تذكر بياناتي',
+                                    style: GoogleFonts.cairo(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF334155),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                _showMessage(
+                                  'لإعادة تعيين كلمة المرور، يرجى التواصل مع إدارة الموارد البشرية أو قسم الدعم',
+                                );
+                              },
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                'نسيت كلمة المرور؟',
+                                style: GoogleFonts.cairo(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF2563EB),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 22),
+
+                        // Primary Action Button: Login (Deep Royal Blue Gradient)
+                        Container(
+                          width: double.infinity,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              begin: Alignment.centerRight,
+                              end: Alignment.centerLeft,
+                              colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                                blurRadius: 18,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: isLoading ? null : _handleLogin,
+                              child: Center(
+                                child: Text(
+                                  'تسجيل الدخول',
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                          const Expanded(child: Divider()),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            side: const BorderSide(
-                              color: AppTheme.primary,
-                              width: 1.5,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            backgroundColor:
-                                AppTheme.primary.withValues(alpha: 0.04),
-                          ),
-                          onPressed: (_isBiometricLoading || provider.isLoading)
-                              ? null
-                              : _handleBiometricLogin,
-                          icon: _isBiometricLoading
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : Icon(
-                                  _biometricLabel.contains('الوجه')
-                                      ? Icons.face_rounded
-                                      : Icons.fingerprint_rounded,
-                                  color: AppTheme.primary,
-                                  size: 26,
+                        ),
+
+                        // Biometric Quick Login Button (if available)
+                        if (_canBiometric) ...[
+                          const SizedBox(height: 20),
+                          Row(
+                            children: [
+                              const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 14),
+                                child: Text(
+                                  'أو المتابعة السريعة',
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF94A3B8),
+                                  ),
                                 ),
-                          label: Text(
-                            'الدخول عبر $_biometricLabel',
-                            style: GoogleFonts.cairo(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
-                              color: AppTheme.primary,
+                              ),
+                              const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            width: double.infinity,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: const Color(0xFFE2E8F0),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: isLoading ? null : _handleBiometricLogin,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      _biometricLabel.contains('الوجه')
+                                          ? Icons.face_rounded
+                                          : Icons.fingerprint_rounded,
+                                      color: const Color(0xFF1E3A8A),
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'الدخول بـ $_biometricLabel',
+                                      style: GoogleFonts.cairo(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
+                        ],
+
+                        const SizedBox(height: 28),
+
+                        // Footer branding
+                        Center(
+                          child: Column(
+                            children: [
+                              Text(
+                                'شركة الدليل الرقمي لتقنية المعلومات والنظم الجغرافية',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.cairo(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF94A3B8),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                AppConfig.displayVersion,
+                                style: GoogleFonts.cairo(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                    Center(
-                      child: Text(
-                        AppConfig.fullVersionString,
-                        style: GoogleFonts.cairo(
-                          fontSize: 11,
-                          color: AppTheme.muted,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
+          ),
+
+          // 4. Frosted Glass Loading Overlay (Frame 14s in the video)
+          if (isLoading)
+            Positioned.fill(
+              child: _FlightLoadingOverlay(
+                controller: _flightAnimController,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    bool isPassword = false,
+    bool obscureText = false,
+    VoidCallback? onToggleVisibility,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Container(
+      height: 52,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      alignment: Alignment.center,
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF94A3B8), size: 21),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              obscureText: isPassword ? obscureText : false,
+              keyboardType: keyboardType,
+              style: GoogleFonts.cairo(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF0F172A),
+              ),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: GoogleFonts.cairo(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF94A3B8),
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          if (isPassword)
+            IconButton(
+              icon: Icon(
+                obscureText
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                color: const Color(0xFF94A3B8),
+                size: 20,
+              ),
+              onPressed: onToggleVisibility,
+              splashRadius: 20,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Custom scenic painter for the top section matching the video illustration:
+/// Soft layered mountains, distant peaks, clouds, sun glow and modern corporate wayfinding badge.
+class _TravelScenicHeader extends StatelessWidget {
+  const _TravelScenicHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _ScenicPainter(),
+      child: Container(),
+    );
+  }
+}
+
+class _ScenicPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 1. Sky Gradient
+    final skyPaint = Paint()
+      ..shader = ui.Gradient.linear(
+        Offset.zero,
+        Offset(0, size.height),
+        [
+          const Color(0xFFB5CCE2),
+          const Color(0xFFD3E2F0),
+          const Color(0xFFE8F1F8),
+        ],
+        [0.0, 0.5, 1.0],
+      );
+    canvas.drawRect(Offset.zero & size, skyPaint);
+
+    // 2. Soft Sun / Glow in upper right
+    final sunGlow = Paint()
+      ..color = Colors.white.withValues(alpha: 0.45)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 35);
+    canvas.drawCircle(Offset(size.width * 0.75, size.height * 0.22), 55, sunGlow);
+
+    final sunCore = Paint()..color = const Color(0xFFFFF7ED).withValues(alpha: 0.9);
+    canvas.drawCircle(Offset(size.width * 0.75, size.height * 0.22), 26, sunCore);
+
+    // 3. Floating Clouds
+    _drawCloud(canvas, Offset(size.width * 0.20, size.height * 0.18), 34);
+    _drawCloud(canvas, Offset(size.width * 0.85, size.height * 0.12), 26);
+
+    // 4. Distant Mountain Ridge (Soft lavender/blue)
+    final distantPeak = Path()
+      ..moveTo(0, size.height * 0.65)
+      ..lineTo(size.width * 0.25, size.height * 0.38)
+      ..lineTo(size.width * 0.50, size.height * 0.60)
+      ..lineTo(size.width * 0.78, size.height * 0.35)
+      ..lineTo(size.width, size.height * 0.55)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    final distantPaint = Paint()..color = const Color(0xFFA2BCD5);
+    canvas.drawPath(distantPeak, distantPaint);
+
+    // 5. Midground Mountain Ridge
+    final midPeak = Path()
+      ..moveTo(0, size.height * 0.78)
+      ..lineTo(size.width * 0.38, size.height * 0.46)
+      ..lineTo(size.width * 0.65, size.height * 0.68)
+      ..lineTo(size.width, size.height * 0.50)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    final midPaint = Paint()..color = const Color(0xFF7D9FB/255 != 0 ? 0xFF83A2C1 : 0xFF7D9FB0);
+    canvas.drawPath(midPeak, midPaint);
+
+    // 6. Foreground Slope (Rich Slate Navy)
+    final fgSlope = Path()
+      ..moveTo(0, size.height * 0.55)
+      ..lineTo(size.width * 0.32, size.height * 0.75)
+      ..lineTo(size.width * 0.70, size.height * 0.62)
+      ..lineTo(size.width, size.height * 0.80)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    final fgPaint = Paint()..color = const Color(0xFF6285A7);
+    canvas.drawPath(fgSlope, fgPaint);
+
+    // 7. Iconic Transit / Al-Dallel Waypoint Sign (matches the orange bus/station sign in the video)
+    final signX = size.width * 0.72;
+    final signY = size.height * 0.44;
+
+    // Pole
+    final polePaint = Paint()
+      ..color = const Color(0xFF94A3B8)
+      ..strokeWidth = 3.5
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset(signX, signY), Offset(signX, signY + 60), polePaint);
+
+    // Sign Box (Warm amber/orange like in video)
+    final signRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(signX, signY - 4), width: 38, height: 38),
+      const Radius.circular(10),
+    );
+    final signBg = Paint()..color = const Color(0xFFD97706);
+    canvas.drawRRect(signRect, signBg);
+
+    // Sign Border
+    final signBorder = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+    canvas.drawRRect(signRect, signBorder);
+
+    // Sign Icon (Bus / Transit / Headquarters marker)
+    final iconPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(signX, signY - 4), width: 18, height: 16),
+        const Radius.circular(4),
+      ),
+      iconPaint,
+    );
+    // Wheels/dots
+    final dotPaint = Paint()..color = const Color(0xFFD97706);
+    canvas.drawCircle(Offset(signX - 4.5, signY + 1), 2.2, dotPaint);
+    canvas.drawCircle(Offset(signX + 4.5, signY + 1), 2.2, dotPaint);
+
+    // 8. Traveler / Employee with backpack (matches character in video)
+    final charX = size.width * 0.46;
+    final charY = size.height * 0.52;
+
+    // Body (Teal shirt)
+    final shirtPaint = Paint()..color = const Color(0xFF0F766E);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(charX, charY + 12), width: 22, height: 26),
+        const Radius.circular(6),
+      ),
+      shirtPaint,
+    );
+
+    // Head & Hair
+    final headPaint = Paint()..color = const Color(0xFFFDE68A);
+    canvas.drawCircle(Offset(charX, charY - 6), 9, headPaint);
+    final hairPaint = Paint()..color = const Color(0xFF1E293B);
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(charX, charY - 6), radius: 9),
+      math.pi,
+      math.pi,
+      true,
+      hairPaint,
+    );
+
+    // Backpack (Warm ochre/yellow)
+    final packPaint = Paint()..color = const Color(0xFFEAB308);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(charX - 11, charY + 12), width: 10, height: 20),
+        const Radius.circular(4),
+      ),
+      packPaint,
+    );
+
+    // Raised arm waving/pointing forward
+    final armPaint = Paint()
+      ..color = const Color(0xFF0F766E)
+      ..strokeWidth = 4.0
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset(charX + 8, charY + 6), Offset(charX + 28, charY + 4), armPaint);
+  }
+
+  void _drawCloud(Canvas canvas, Offset center, double size) {
+    final cloudPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.75);
+    canvas.drawCircle(center, size * 0.5, cloudPaint);
+    canvas.drawCircle(Offset(center.dx - size * 0.35, center.dy + size * 0.1), size * 0.35, cloudPaint);
+    canvas.drawCircle(Offset(center.dx + size * 0.35, center.dy + size * 0.1), size * 0.40, cloudPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Frosted Glass Loading Overlay matching Frame 14s in the video:
+/// Translucent blur + curved dotted arc + orbiting jet/star particle + "Logging you in" typography
+class _FlightLoadingOverlay extends StatelessWidget {
+  final AnimationController controller;
+
+  const _FlightLoadingOverlay({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+      child: Container(
+        color: Colors.white.withValues(alpha: 0.82),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Animated Orbiting Arc with Plane / Dot Particle
+              SizedBox(
+                width: 140,
+                height: 110,
+                child: AnimatedBuilder(
+                  animation: controller,
+                  builder: (context, _) {
+                    return CustomPaint(
+                      painter: _OrbitingFlightPainter(progress: controller.value),
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              Text(
+                'جاري تسجيل الدخول...',
+                style: GoogleFonts.cairo(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+
+              const SizedBox(height: 4),
+
+              Text(
+                'يتم تجهيز بياناتك وملفك الشخصي',
+                style: GoogleFonts.cairo(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+class _OrbitingFlightPainter extends CustomPainter {
+  final double progress;
+
+  _OrbitingFlightPainter({required this.progress});
 
   @override
-  void dispose() {
-    _identifierController.dispose();
-    _passwordController.dispose();
-    super.dispose();
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+
+    // Arched flight trajectory
+    final start = Offset(center.dx - 45, center.dy + 35);
+    final cp1 = Offset(center.dx - 30, center.dy - 35);
+    final cp2 = Offset(center.dx + 25, center.dy - 40);
+    final end = Offset(center.dx + 48, center.dy - 10);
+
+    final path = Path()
+      ..moveTo(start.dx, start.dy)
+      ..cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, end.dx, end.dy);
+
+    final metrics = path.computeMetrics().toList();
+    if (metrics.isEmpty) return;
+    final metric = metrics.first;
+
+    // 1. Draw Dotted Curve (like in the video)
+    final dotPaint = Paint()
+      ..color = const Color(0xFF1E3A8A).withValues(alpha: 0.35)
+      ..style = PaintingStyle.fill;
+
+    const dotCount = 8;
+    for (int i = 0; i <= dotCount; i++) {
+      final t = i / dotCount;
+      final tangent = metric.getTangentForOffset(metric.length * t);
+      if (tangent != null) {
+        final radius = 1.5 + (i * 0.3);
+        canvas.drawCircle(tangent.position, radius, dotPaint);
+      }
+    }
+
+    // 2. Flying Airplane / Particle along the arc
+    final currentOffset = metric.length * progress;
+    final tangent = metric.getTangentForOffset(currentOffset);
+    if (tangent != null) {
+      canvas.save();
+      canvas.translate(tangent.position.dx, tangent.position.dy);
+      canvas.rotate(tangent.angle);
+
+      // Jet Glow
+      final glowPaint = Paint()
+        ..color = const Color(0xFF2563EB).withValues(alpha: 0.4)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      canvas.drawCircle(Offset.zero, 10, glowPaint);
+
+      // Jet Shape
+      final planePaint = Paint()
+        ..color = const Color(0xFF1E3A8A)
+        ..style = PaintingStyle.fill;
+
+      final planePath = Path()
+        ..moveTo(9, 0)
+        ..lineTo(-5, -6)
+        ..lineTo(-2, 0)
+        ..lineTo(-5, 6)
+        ..close();
+      canvas.drawPath(planePath, planePaint);
+
+      canvas.restore();
+    }
   }
+
+  @override
+  bool shouldRepaint(covariant _OrbitingFlightPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
