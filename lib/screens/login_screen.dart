@@ -18,9 +18,15 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _identifierFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
+
+  bool _isIdentifierFocused = false;
+  bool _isPasswordFocused = false;
+
   bool _rememberMe = true;
   bool _obscurePassword = true;
   final _storage = const SafeStorage();
@@ -30,14 +36,43 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isBiometricLoading = false;
 
   late final AnimationController _flightAnimController;
+  late final AnimationController _heroMotionController;
+  late final AnimationController _badgeBobController;
 
   @override
   void initState() {
     super.initState();
+
+    // 1. Loading flight animation controller
     _flightAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat();
+
+    // 2. Continuous cinematic Ken-Burns motion for the real photo header
+    _heroMotionController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    )..repeat(reverse: true);
+
+    // 3. Subtle floating bobbing animation for the glassmorphism badges
+    _badgeBobController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    )..repeat(reverse: true);
+
+    // Track focus for email & password fields
+    _identifierFocusNode.addListener(() {
+      setState(() {
+        _isIdentifierFocused = _identifierFocusNode.hasFocus;
+      });
+    });
+
+    _passwordFocusNode.addListener(() {
+      setState(() {
+        _isPasswordFocused = _passwordFocusNode.hasFocus;
+      });
+    });
 
     _loadSavedCredentials();
     _checkBiometric();
@@ -46,6 +81,10 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _flightAnimController.dispose();
+    _heroMotionController.dispose();
+    _badgeBobController.dispose();
+    _identifierFocusNode.dispose();
+    _passwordFocusNode.dispose();
     _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -130,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen>
     final password = _passwordController.text;
 
     if (identifier.isEmpty || password.isEmpty) {
-      _showMessage('يرجى إدخال البريد الإلكتروني أو الرقم الوظيفي وكلمة المرور');
+      _showMessage('يرجى إدخال الرقم الوظيفي أو اسم المستخدم وكلمة المرور');
       return;
     }
 
@@ -173,23 +212,27 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     final provider = context.watch<PortalProvider>();
     final size = MediaQuery.of(context).size;
-    final topBannerHeight = math.min(size.height * 0.38, 300.0);
+    // Real photo header occupies approximately 40-42% of the screen height
+    final topBannerHeight = math.min(size.height * 0.42, 340.0);
     final isLoading = provider.isLoading || _isBiometricLoading;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFE9F0F8),
+      backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // 1. Scenic Mountain & Travel Landscape Header (matches video top)
+          // 1. Real Photo Animated Header with Ken Burns & Glassmorphism Badges
           Positioned(
             top: 0,
             left: 0,
             right: 0,
             height: topBannerHeight + 40,
-            child: const _TravelScenicHeader(),
+            child: _RealOfficeAnimatedHeader(
+              motionController: _heroMotionController,
+              bobController: _badgeBobController,
+            ),
           ),
 
-          // 2. Main Scrollable Content Overlapping the Banner
+          // 2. Main Scrollable Content Overlapping the Photo
           Positioned.fill(
             child: SingleChildScrollView(
               physics: const ClampingScrollPhysics(),
@@ -197,7 +240,7 @@ class _LoginScreenState extends State<LoginScreen>
                 children: [
                   SizedBox(height: topBannerHeight),
 
-                  // 3. Rounded White Card Sheet (matches video card)
+                  // 3. Rounded White Card Sheet (matches user's screenshot)
                   Container(
                     width: double.infinity,
                     constraints: const BoxConstraints(minHeight: 520),
@@ -209,59 +252,64 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Color(0x1A0F172A),
+                          color: Color(0x220F172A),
                           blurRadius: 30,
-                          offset: Offset(0, -8),
+                          offset: Offset(0, -10),
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.fromLTRB(26, 32, 26, 40),
+                    padding: const EdgeInsets.fromLTRB(22, 28, 22, 36),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Title: Welcome back / مرحباً بك مجدداً
+                        // Title: أهلاً بعودتك
                         Center(
                           child: Column(
                             children: [
                               Text(
-                                'مرحباً بك مجدداً',
+                                'أهلاً بعودتك',
                                 style: GoogleFonts.cairo(
-                                  fontSize: 26,
+                                  fontSize: 27,
                                   fontWeight: FontWeight.w900,
                                   color: const Color(0xFF0F172A),
                                   letterSpacing: -0.5,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 6),
                               Text(
-                                'سجل دخولك لمتابعة الحضور، الرواتب والطلبات',
+                                'سجّل دخولك إلى بوابة الموظفين — شركة الدليل الرقمي\nلمتابعة حضورك ومهامك وطلباتك',
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.cairo(
-                                  fontSize: 13,
+                                  fontSize: 12.5,
                                   fontWeight: FontWeight.w600,
                                   color: const Color(0xFF64748B),
+                                  height: 1.5,
                                 ),
                               ),
                             ],
                           ),
                         ),
 
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 26),
 
-                        // Input 1: Email or Employee Number
-                        _buildInputField(
+                        // Input 1: Employee ID / Username (Full width, height: 56px)
+                        _buildGenerousInputField(
                           controller: _identifierController,
-                          hint: 'البريد الإلكتروني أو الرقم الوظيفي',
-                          icon: Icons.mail_outline_rounded,
-                          keyboardType: TextInputType.emailAddress,
+                          focusNode: _identifierFocusNode,
+                          isFocused: _isIdentifierFocused,
+                          hint: 'الرقم الوظيفي أو اسم المستخدم',
+                          icon: Icons.person_outline_rounded,
+                          keyboardType: TextInputType.text,
                         ),
 
                         const SizedBox(height: 14),
 
-                        // Input 2: Password with eye toggle
-                        _buildInputField(
+                        // Input 2: Password (Full width, height: 56px with eye toggle)
+                        _buildGenerousInputField(
                           controller: _passwordController,
-                          hint: 'أدخل كلمة المرور',
+                          focusNode: _passwordFocusNode,
+                          isFocused: _isPasswordFocused,
+                          hint: 'كلمة المرور',
                           icon: Icons.lock_outline_rounded,
                           isPassword: true,
                           obscureText: _obscurePassword,
@@ -272,7 +320,7 @@ class _LoginScreenState extends State<LoginScreen>
                           },
                         ),
 
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
 
                         // Remember me checkbox & Forgot password row
                         Row(
@@ -285,6 +333,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 });
                               },
                               child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   SizedBox(
                                     width: 22,
@@ -299,20 +348,20 @@ class _LoginScreenState extends State<LoginScreen>
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(5),
                                       ),
-                                      activeColor: const Color(0xFF1E3A8A),
+                                      activeColor: const Color(0xFF155488),
                                       side: const BorderSide(
-                                        color: Color(0xFFCBD5E1),
+                                        color: Color(0xFF94A3B8),
                                         width: 1.5,
                                       ),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'تذكر بياناتي',
+                                    'تذكّرني',
                                     style: GoogleFonts.cairo(
-                                      fontSize: 12.5,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w700,
-                                      color: const Color(0xFF334155),
+                                      color: const Color(0xFF1E293B),
                                     ),
                                   ),
                                 ],
@@ -332,9 +381,9 @@ class _LoginScreenState extends State<LoginScreen>
                               child: Text(
                                 'نسيت كلمة المرور؟',
                                 style: GoogleFonts.cairo(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF2563EB),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF155488),
                                 ),
                               ),
                             ),
@@ -343,22 +392,22 @@ class _LoginScreenState extends State<LoginScreen>
 
                         const SizedBox(height: 22),
 
-                        // Primary Action Button: Login (Deep Royal Blue Gradient)
+                        // Primary Action Button: تسجيل الدخول (Solid Deep Navy / Ocean Blue, Height: 54px)
                         Container(
                           width: double.infinity,
-                          height: 52,
+                          height: 54,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               begin: Alignment.centerRight,
                               end: Alignment.centerLeft,
-                              colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                              colors: [Color(0xFF155488), Color(0xFF0F4370)],
                             ),
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF2563EB).withValues(alpha: 0.35),
-                                blurRadius: 18,
-                                offset: const Offset(0, 8),
+                                color: const Color(0xFF155488).withValues(alpha: 0.35),
+                                blurRadius: 16,
+                                offset: const Offset(0, 7),
                               ),
                             ],
                           ),
@@ -367,16 +416,25 @@ class _LoginScreenState extends State<LoginScreen>
                             child: InkWell(
                               borderRadius: BorderRadius.circular(16),
                               onTap: isLoading ? null : _handleLogin,
-                              child: Center(
-                                child: Text(
-                                  'تسجيل الدخول',
-                                  style: GoogleFonts.cairo(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.login_rounded,
                                     color: Colors.white,
-                                    letterSpacing: 0.3,
+                                    size: 22,
                                   ),
-                                ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'تسجيل الدخول',
+                                    style: GoogleFonts.cairo(
+                                      fontSize: 16.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -384,28 +442,10 @@ class _LoginScreenState extends State<LoginScreen>
 
                         // Biometric Quick Login Button (if available)
                         if (_canBiometric) ...[
-                          const SizedBox(height: 20),
-                          Row(
-                            children: [
-                              const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 14),
-                                child: Text(
-                                  'أو المتابعة السريعة',
-                                  style: GoogleFonts.cairo(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF94A3B8),
-                                  ),
-                                ),
-                              ),
-                              const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
-                            ],
-                          ),
                           const SizedBox(height: 16),
                           Container(
                             width: double.infinity,
-                            height: 50,
+                            height: 52,
                             decoration: BoxDecoration(
                               color: const Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.circular(16),
@@ -426,7 +466,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       _biometricLabel.contains('الوجه')
                                           ? Icons.face_rounded
                                           : Icons.fingerprint_rounded,
-                                      color: const Color(0xFF1E3A8A),
+                                      color: const Color(0xFF155488),
                                       size: 24,
                                     ),
                                     const SizedBox(width: 10),
@@ -445,31 +485,60 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                         ],
 
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 26),
 
-                        // Footer branding
+                        // Bottom Helper / Contact HR (matches user's screenshot footer)
                         Center(
-                          child: Column(
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Text(
-                                'شركة الدليل الرقمي لتقنية المعلومات والنظم الجغرافية',
-                                textAlign: TextAlign.center,
+                                'ليس لديك حساب؟ ',
                                 style: GoogleFonts.cairo(
-                                  fontSize: 11,
+                                  fontSize: 12.5,
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF94A3B8),
+                                  color: const Color(0xFF64748B),
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              GestureDetector(
+                                onTap: () {
+                                  _showMessage(
+                                    'يرجى مراجعة إدارة الموارد البشرية لإنشاء وتفعيل حسابك في المنظومة',
+                                  );
+                                },
+                                child: Text(
+                                  'تواصل مع قسم الموارد البشرية',
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF155488),
+                                  ),
+                                ),
+                              ),
                               Text(
-                                AppConfig.displayVersion,
+                                ' لتفعيل حسابك',
                                 style: GoogleFonts.cairo(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
                                   color: const Color(0xFF64748B),
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // App Version Tag
+                        Center(
+                          child: Text(
+                            AppConfig.displayVersion,
+                            style: GoogleFonts.cairo(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF94A3B8),
+                            ),
                           ),
                         ),
                       ],
@@ -492,8 +561,16 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildInputField({
+  /// Generous Input Field matching user's uploaded screenshot:
+  /// - Full width (double.infinity).
+  /// - Height: 56px (generous vertical height).
+  /// - Unfocused: Soft light grey container (#F3F5F9), no border.
+  /// - Focused: Pure white (#FFFFFF), crisp dark border (#0F172A, 1.6px) with soft elevation.
+  /// - Proper RTL alignment: Right-side prefix icon, right-aligned text.
+  Widget _buildGenerousInputField({
     required TextEditingController controller,
+    required FocusNode focusNode,
+    required bool isFocused,
     required String hint,
     required IconData icon,
     bool isPassword = false,
@@ -502,55 +579,70 @@ class _LoginScreenState extends State<LoginScreen>
     TextInputType keyboardType = TextInputType.text,
   }) {
     return Container(
-      height: 52,
+      width: double.infinity,
+      height: 56,
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: const Color(0xFFF3F4F7),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-          width: 1.2,
-        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       alignment: Alignment.center,
       child: Row(
+        textDirection: TextDirection.rtl,
         children: [
-          Icon(icon, color: const Color(0xFF94A3B8), size: 21),
+          // Prefix Icon (on the right side in RTL)
+          Icon(
+            icon,
+            color: const Color(0xFF64748B),
+            size: 23,
+          ),
           const SizedBox(width: 12),
+
+          // Text Field (Completely borderless)
           Expanded(
             child: TextField(
               controller: controller,
+              focusNode: focusNode,
               obscureText: isPassword ? obscureText : false,
               keyboardType: keyboardType,
+              textAlign: TextAlign.right,
+              textDirection: TextDirection.rtl,
               style: GoogleFonts.cairo(
-                fontSize: 13.5,
+                fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF0F172A),
               ),
               decoration: InputDecoration(
                 hintText: hint,
+                hintTextDirection: TextDirection.rtl,
                 hintStyle: GoogleFonts.cairo(
-                  fontSize: 13,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w600,
                   color: const Color(0xFF94A3B8),
                 ),
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
               ),
             ),
           ),
+
+          // Password Visibility Toggle (on the left side in RTL)
           if (isPassword)
             IconButton(
               icon: Icon(
                 obscureText
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
-                color: const Color(0xFF94A3B8),
-                size: 20,
+                color: const Color(0xFF64748B),
+                size: 22,
               ),
               onPressed: onToggleVisibility,
-              splashRadius: 20,
+              splashRadius: 22,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
             ),
@@ -560,183 +652,217 @@ class _LoginScreenState extends State<LoginScreen>
   }
 }
 
-/// Custom scenic painter for the top section matching the video illustration:
-/// Soft layered mountains, distant peaks, clouds, sun glow and modern corporate wayfinding badge.
-class _TravelScenicHeader extends StatelessWidget {
-  const _TravelScenicHeader();
+/// Real Office Animated Header:
+/// Displays the real photographic image of professional team giving high-five,
+/// with continuous Ken Burns motion (smooth zoom + pan drift),
+/// floating glassmorphism badges ("حضور تلقائي" & "مهامك واجتماعاتك"),
+/// and the company logo badge in top-right.
+class _RealOfficeAnimatedHeader extends StatelessWidget {
+  final AnimationController motionController;
+  final AnimationController bobController;
+
+  const _RealOfficeAnimatedHeader({
+    required this.motionController,
+    required this.bobController,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _ScenicPainter(),
-      child: Container(),
+    return AnimatedBuilder(
+      animation: Listenable.merge([motionController, bobController]),
+      builder: (context, child) {
+        // Continuous Ken Burns zoom from 1.0 to 1.08
+        final scale = 1.0 + (motionController.value * 0.08);
+        final dx = math.sin(motionController.value * math.pi) * 10.0;
+        final dy = math.cos(motionController.value * math.pi) * 4.0;
+
+        // Subtle floating bobbing for badges
+        final bob1 = math.sin(bobController.value * math.pi) * 4.0;
+        final bob2 = math.cos(bobController.value * math.pi) * 4.0;
+
+        return ClipRect(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // 1. The Real Photo with Continuous Ken Burns Motion
+              Transform.translate(
+                offset: Offset(dx, dy),
+                child: Transform.scale(
+                  scale: scale,
+                  child: Image.asset(
+                    'assets/images/office_team_hero.jpg',
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Image.asset(
+                        'assets/images/login_hero.jpg',
+                        fit: BoxFit.cover,
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+              // 2. Subtle Dark Vignette & Soft Gradient for contrast
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.18),
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.28),
+                    ],
+                    stops: const [0.0, 0.5, 1.0],
+                  ),
+                ),
+              ),
+
+              // 3. Top-Right Company Logo Badge (matching user's screenshot)
+              Positioned(
+                top: 40,
+                right: 20,
+                child: Container(
+                  width: 65,
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Image.asset(
+                    'assets/images/logo_dallel_color.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Image.asset(
+                        'assets/images/logo_dallel_white.png',
+                        fit: BoxFit.contain,
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+              // 4. Floating Glassmorphism Badge 1 (Left): "مهامك واجتماعاتك في مكان واحد"
+              Positioned(
+                top: 175 + bob1,
+                left: 14,
+                child: _buildGlassBadge(
+                  icon: Icons.checklist_rounded,
+                  title: 'مهامك واجتماعاتك',
+                  subtitle: 'في مكان واحد',
+                  iconBgColor: Colors.white,
+                  iconColor: const Color(0xFF0F766E),
+                ),
+              ),
+
+              // 5. Floating Glassmorphism Badge 2 (Right): "حضور تلقائي بدخول مساحة العمل"
+              Positioned(
+                bottom: 50 + bob2,
+                right: 18,
+                child: _buildGlassBadge(
+                  icon: Icons.check_circle_rounded,
+                  title: 'حضور تلقائي',
+                  subtitle: 'بدخول مساحة العمل',
+                  iconBgColor: Colors.white,
+                  iconColor: const Color(0xFF155488),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
-}
 
-class _ScenicPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    // 1. Sky Gradient
-    final skyPaint = Paint()
-      ..shader = ui.Gradient.linear(
-        Offset.zero,
-        Offset(0, size.height),
-        [
-          const Color(0xFFB5CCE2),
-          const Color(0xFFD3E2F0),
-          const Color(0xFFE8F1F8),
-        ],
-        [0.0, 0.5, 1.0],
-      );
-    canvas.drawRect(Offset.zero & size, skyPaint);
-
-    // 2. Soft Sun / Glow in upper right
-    final sunGlow = Paint()
-      ..color = Colors.white.withValues(alpha: 0.45)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 35);
-    canvas.drawCircle(Offset(size.width * 0.75, size.height * 0.22), 55, sunGlow);
-
-    final sunCore = Paint()..color = const Color(0xFFFFF7ED).withValues(alpha: 0.9);
-    canvas.drawCircle(Offset(size.width * 0.75, size.height * 0.22), 26, sunCore);
-
-    // 3. Floating Clouds
-    _drawCloud(canvas, Offset(size.width * 0.20, size.height * 0.18), 34);
-    _drawCloud(canvas, Offset(size.width * 0.85, size.height * 0.12), 26);
-
-    // 4. Distant Mountain Ridge (Soft lavender/blue)
-    final distantPeak = Path()
-      ..moveTo(0, size.height * 0.65)
-      ..lineTo(size.width * 0.25, size.height * 0.38)
-      ..lineTo(size.width * 0.50, size.height * 0.60)
-      ..lineTo(size.width * 0.78, size.height * 0.35)
-      ..lineTo(size.width, size.height * 0.55)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    final distantPaint = Paint()..color = const Color(0xFFA2BCD5);
-    canvas.drawPath(distantPeak, distantPaint);
-
-    // 5. Midground Mountain Ridge
-    final midPeak = Path()
-      ..moveTo(0, size.height * 0.78)
-      ..lineTo(size.width * 0.38, size.height * 0.46)
-      ..lineTo(size.width * 0.65, size.height * 0.68)
-      ..lineTo(size.width, size.height * 0.50)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    final midPaint = Paint()..color = const Color(0xFF7D9FB/255 != 0 ? 0xFF83A2C1 : 0xFF7D9FB0);
-    canvas.drawPath(midPeak, midPaint);
-
-    // 6. Foreground Slope (Rich Slate Navy)
-    final fgSlope = Path()
-      ..moveTo(0, size.height * 0.55)
-      ..lineTo(size.width * 0.32, size.height * 0.75)
-      ..lineTo(size.width * 0.70, size.height * 0.62)
-      ..lineTo(size.width, size.height * 0.80)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    final fgPaint = Paint()..color = const Color(0xFF6285A7);
-    canvas.drawPath(fgSlope, fgPaint);
-
-    // 7. Iconic Transit / Al-Dallel Waypoint Sign (matches the orange bus/station sign in the video)
-    final signX = size.width * 0.72;
-    final signY = size.height * 0.44;
-
-    // Pole
-    final polePaint = Paint()
-      ..color = const Color(0xFF94A3B8)
-      ..strokeWidth = 3.5
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(Offset(signX, signY), Offset(signX, signY + 60), polePaint);
-
-    // Sign Box (Warm amber/orange like in video)
-    final signRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(signX, signY - 4), width: 38, height: 38),
-      const Radius.circular(10),
-    );
-    final signBg = Paint()..color = const Color(0xFFD97706);
-    canvas.drawRRect(signRect, signBg);
-
-    // Sign Border
-    final signBorder = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-    canvas.drawRRect(signRect, signBorder);
-
-    // Sign Icon (Bus / Transit / Headquarters marker)
-    final iconPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(signX, signY - 4), width: 18, height: 16),
-        const Radius.circular(4),
+  Widget _buildGlassBadge({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color iconBgColor,
+    required Color iconColor,
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.38),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.35),
+              width: 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            textDirection: TextDirection.rtl,
+            children: [
+              // Icon with clean white circle background
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 10),
+              // Text column
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.cairo(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      height: 1.2,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.cairo(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.82),
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
-      iconPaint,
     );
-    // Wheels/dots
-    final dotPaint = Paint()..color = const Color(0xFFD97706);
-    canvas.drawCircle(Offset(signX - 4.5, signY + 1), 2.2, dotPaint);
-    canvas.drawCircle(Offset(signX + 4.5, signY + 1), 2.2, dotPaint);
-
-    // 8. Traveler / Employee with backpack (matches character in video)
-    final charX = size.width * 0.46;
-    final charY = size.height * 0.52;
-
-    // Body (Teal shirt)
-    final shirtPaint = Paint()..color = const Color(0xFF0F766E);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(charX, charY + 12), width: 22, height: 26),
-        const Radius.circular(6),
-      ),
-      shirtPaint,
-    );
-
-    // Head & Hair
-    final headPaint = Paint()..color = const Color(0xFFFDE68A);
-    canvas.drawCircle(Offset(charX, charY - 6), 9, headPaint);
-    final hairPaint = Paint()..color = const Color(0xFF1E293B);
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset(charX, charY - 6), radius: 9),
-      math.pi,
-      math.pi,
-      true,
-      hairPaint,
-    );
-
-    // Backpack (Warm ochre/yellow)
-    final packPaint = Paint()..color = const Color(0xFFEAB308);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(charX - 11, charY + 12), width: 10, height: 20),
-        const Radius.circular(4),
-      ),
-      packPaint,
-    );
-
-    // Raised arm waving/pointing forward
-    final armPaint = Paint()
-      ..color = const Color(0xFF0F766E)
-      ..strokeWidth = 4.0
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(Offset(charX + 8, charY + 6), Offset(charX + 28, charY + 4), armPaint);
   }
-
-  void _drawCloud(Canvas canvas, Offset center, double size) {
-    final cloudPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.75);
-    canvas.drawCircle(center, size * 0.5, cloudPaint);
-    canvas.drawCircle(Offset(center.dx - size * 0.35, center.dy + size * 0.1), size * 0.35, cloudPaint);
-    canvas.drawCircle(Offset(center.dx + size * 0.35, center.dy + size * 0.1), size * 0.40, cloudPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// Frosted Glass Loading Overlay matching Frame 14s in the video:
@@ -751,7 +877,7 @@ class _FlightLoadingOverlay extends StatelessWidget {
     return BackdropFilter(
       filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
       child: Container(
-        color: Colors.white.withValues(alpha: 0.82),
+        color: Colors.white.withValues(alpha: 0.85),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -824,7 +950,7 @@ class _OrbitingFlightPainter extends CustomPainter {
 
     // 1. Draw Dotted Curve (like in the video)
     final dotPaint = Paint()
-      ..color = const Color(0xFF1E3A8A).withValues(alpha: 0.35)
+      ..color = const Color(0xFF155488).withValues(alpha: 0.35)
       ..style = PaintingStyle.fill;
 
     const dotCount = 8;
@@ -847,13 +973,13 @@ class _OrbitingFlightPainter extends CustomPainter {
 
       // Jet Glow
       final glowPaint = Paint()
-        ..color = const Color(0xFF2563EB).withValues(alpha: 0.4)
+        ..color = const Color(0xFF155488).withValues(alpha: 0.4)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
       canvas.drawCircle(Offset.zero, 10, glowPaint);
 
       // Jet Shape
       final planePaint = Paint()
-        ..color = const Color(0xFF1E3A8A)
+        ..color = const Color(0xFF155488)
         ..style = PaintingStyle.fill;
 
       final planePath = Path()
