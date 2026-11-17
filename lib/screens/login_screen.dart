@@ -613,6 +613,10 @@ class _LoginScreenState extends State<LoginScreen>
                 color: const Color(0xFF0F172A),
               ),
               decoration: InputDecoration(
+                filled: true,
+                fillColor: const Color(0xFFF3F4F7),
+                hoverColor: Colors.transparent,
+                focusColor: Colors.transparent,
                 hintText: hint,
                 hintTextDirection: TextDirection.rtl,
                 hintStyle: GoogleFonts.cairo(
